@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Search, ShoppingCart, User, Menu, Heart, Package } from "lucide-react"
+import { Search, ShoppingCart, User, Menu, Heart, Package, ShoppingBag } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
@@ -21,11 +21,14 @@ import { useForm } from 'react-hook-form';
 import { useState as useReactState } from 'react';
 
 export function Navbar() {
+  const API = process.env.NEXT_PUBLIC_API_URL;
+  
   const [cartItemCount, setCartItemCount] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
   const [openSignIn, setOpenSignIn] = useState(false);
   const [openSignUp, setOpenSignUp] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -42,7 +45,25 @@ export function Navbar() {
       setCustomer(null);
       setCartItemCount(0);
     }
+    
+    // Fetch categories
+    fetchCategories();
   }, []);
+
+  async function fetchCategories() {
+    try {
+      const res = await fetch(`${API}/products/categories/all`);
+      const data = await res.json();
+      if (res.ok && data.categories && Array.isArray(data.categories)) {
+        setCategories(data.categories);
+      } else {
+        setCategories([]);
+      }
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setCategories([]);
+    }
+  }
 
   async function fetchCartCount(token: string) {
     try {
@@ -75,8 +96,6 @@ export function Navbar() {
   const [signUpError, setSignUpError] = useReactState('');
   const [signUpSuccess, setSignUpSuccess] = useReactState('');
   const [signUpLoading, setSignUpLoading] = useReactState(false);
-
-  const API = process.env.NEXT_PUBLIC_API_URL;
 
   async function handleSignIn(data: any) {
     setSignInLoading(true);
@@ -161,21 +180,15 @@ export function Navbar() {
                 <Link href="/products" className="text-lg font-medium">
                   All Products
                 </Link>
-                <Link href="/products?category=electronics" className="text-lg font-medium">
-                  Electronics
-                </Link>
-                <Link href="/products?category=fashion" className="text-lg font-medium">
-                  Fashion
-                </Link>
-                <Link href="/products?category=home" className="text-lg font-medium">
-                  Home & Garden
-                </Link>
-                <Link href="/products?category=sports" className="text-lg font-medium">
-                  Sports
-                </Link>
-                <Link href="/products?category=books" className="text-lg font-medium">
-                  Books
-                </Link>
+                {Array.isArray(categories) && categories.map((category) => (
+                  <Link 
+                    key={category.ProductCategoryId} 
+                    href={`/products?categoryId=${category.ProductCategoryId}`} 
+                    className="text-lg font-medium"
+                  >
+                    {category.ProductCategory}
+                  </Link>
+                ))}
               </div>
             </SheetContent>
           </Sheet>
@@ -183,9 +196,9 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">E</span>
+              <ShoppingBag className="text-white h-5 w-5" />
             </div>
-            <span className="font-bold text-xl hidden sm:inline-block">E-Store</span>
+            <span className="font-bold text-xl hidden sm:inline-block">FootStyle</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -196,21 +209,13 @@ export function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger className="text-sm font-medium hover:text-blue-600">Categories</DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem asChild>
-                  <Link href="/products?category=electronics">Electronics</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/products?category=fashion">Fashion</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/products?category=home">Home & Garden</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/products?category=sports">Sports</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/products?category=books">Books</Link>
-                </DropdownMenuItem>
+                {Array.isArray(categories) && categories.map((category) => (
+                  <DropdownMenuItem key={category.ProductCategoryId} asChild>
+                    <Link href={`/products?categoryId=${category.ProductCategoryId}`}>
+                      {category.ProductCategory}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
