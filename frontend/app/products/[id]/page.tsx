@@ -161,7 +161,7 @@ export default function ProductDetailsPage() {
         <div className="space-y-4">
           <div className="aspect-square">
             <Image
-              src={displayImages[selectedImage]?.ImagePath || currentProduct.mainImage || currentProduct.thumbnail || "/placeholder.svg"}
+              src={displayImages[selectedImage]?.ImagePath ? `${API}${displayImages[selectedImage].ImagePath}` : (currentProduct.mainImage ? `${API}${currentProduct.mainImage}` : (currentProduct.thumbnail ? `${API}${currentProduct.thumbnail}` : "/placeholder.svg"))}
               alt={currentProduct.Product}
               width={500}
               height={500}
@@ -170,7 +170,7 @@ export default function ProductDetailsPage() {
           </div>
           {displayImages.length > 1 && (
             <div className="grid grid-cols-4 gap-2">
-              {displayImages.map((image, index) => (
+              {displayImages.map((image: any, index: number) => (
                 <button
                   key={index}
                   onClick={() => setSelectedImage(index)}
@@ -179,7 +179,7 @@ export default function ProductDetailsPage() {
                   }`}
                 >
                   <Image
-                    src={image.ImagePath || "/placeholder.svg"}
+                    src={image.ImagePath ? `${API}${image.ImagePath}` : "/placeholder.svg"}
                     alt={`${currentProduct.Product} ${index + 1}`}
                     width={100}
                     height={100}
@@ -375,7 +375,7 @@ export default function ProductDetailsPage() {
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Category</h4>
-                <p className="text-gray-600">{product.ProductCategory} > {product.ProductSubCategory}</p>
+                <p className="text-gray-600">{product.ProductCategory} &gt; {product.ProductSubCategory}</p>
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Material & Specifications</h4>
@@ -458,7 +458,7 @@ export default function ProductDetailsPage() {
               <Card key={variant.ProductId} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="aspect-square relative">
                   <Image
-                    src={variant.thumbnail || "/placeholder.svg"}
+                    src={variant.thumbnail ? `${API}${variant.thumbnail}` : "/placeholder.svg"}
                     alt={variant.Product}
                     fill
                     className="object-cover"

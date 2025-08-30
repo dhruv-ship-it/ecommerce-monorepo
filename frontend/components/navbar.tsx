@@ -54,9 +54,19 @@ export function Navbar() {
     try {
       const res = await fetch(`${API}/products/categories/all`);
       const data = await res.json();
-      if (res.ok && data.categories && Array.isArray(data.categories)) {
+      
+      // Check for backend errors first
+      if (!res.ok || data.error) {
+        console.error('Backend error:', data.error || 'Server error');
+        setCategories([]);
+        return;
+      }
+      
+      // Check if categories exist and is an array
+      if (data.categories && Array.isArray(data.categories)) {
         setCategories(data.categories);
       } else {
+        console.error('Invalid categories data structure:', data);
         setCategories([]);
       }
     } catch (err) {
