@@ -14,7 +14,6 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Search, ShoppingCart, User, Menu, Heart, Package } from "lucide-react"
 import Link from "next/link"
-import { useSession, signIn, signOut } from 'next-auth/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -23,7 +22,6 @@ import { useState as useReactState } from 'react';
 
 export function Navbar() {
   const [cartItemCount, setCartItemCount] = useState(0);
-  const { data: session } = useSession();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
   const [openSignIn, setOpenSignIn] = useState(false);

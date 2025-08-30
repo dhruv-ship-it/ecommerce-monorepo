@@ -37,6 +37,9 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
+// Serve static files (images) for both frontends
+app.use('/static', express.static('static'));
+
 // MariaDB pool
 export const db = mariadb.createPool({
   host: process.env.DB_HOST,
