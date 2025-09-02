@@ -261,68 +261,6 @@ router.get('/subcategories/:categoryId', async (req, res) => {
   }
 });
 
-// Get all brands
-router.get('/brands/all', async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    const brands = await conn.query('SELECT * FROM Brand WHERE IsDeleted = "" OR IsDeleted = "N"');
-    conn.release();
-    res.json({ brands });
-  } catch (err) {
-    console.error('Error fetching brands:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get all colors
-router.get('/colors/all', async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    const colors = await conn.query('SELECT * FROM Color WHERE IsDeleted = "" OR IsDeleted = "N" ORDER BY Color');
-    conn.release();
-    res.json({ colors });
-  } catch (err) {
-    console.error('Error fetching colors:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get all sizes
-router.get('/sizes/all', async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    const sizes = await conn.query('SELECT * FROM Size WHERE IsDeleted = "" OR IsDeleted = "N" ORDER BY Size');
-    conn.release();
-    res.json({ sizes });
-  } catch (err) {
-    console.error('Error fetching sizes:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get all materials
-router.get('/materials/all', async (req, res) => {
-  try {
-    // Since Material is not linked to Product table, return the available materials from Material table
-    const conn = await db.getConnection();
-    const materials = await conn.query('SELECT * FROM Material WHERE IsDeleted = "" OR IsDeleted = "N" ORDER BY Material');
-    conn.release();
-    res.json({ materials });
-  } catch (err) {
-    console.error('Error fetching materials:', err);
-    // Fallback to default materials if table doesn't exist or query fails
-    res.json({ 
-      materials: [
-        { MaterialId: 1, Material: 'Leather' },
-        { MaterialId: 2, Material: 'Canvas' },
-        { MaterialId: 3, Material: 'Synthetic' },
-        { MaterialId: 4, Material: 'Mesh' },
-        { MaterialId: 5, Material: 'N/A' }
-      ] 
-    });
-  }
-});
-
 // Get products by model with all variants (colors, sizes)
 router.get('/model/:modelId', async (req, res) => {
   try {
