@@ -164,6 +164,55 @@ router.get('/', async (req, res) => {
         } catch (err) {
           console.log('Sizes query error:', err.message);
         }
+        
+        // Get the first available product's image for the model thumbnail
+        try {
+          const firstProduct = await conn.query(`
+            SELECT p.ProductId
+            FROM Product p
+            WHERE p.Model = ? AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+            ORDER BY p.ProductId ASC
+            LIMIT 1
+          `, [model.ModelId]);
+          
+          if (firstProduct && firstProduct.length > 0) {
+            const productId = firstProduct[0].ProductId;
+            
+            // Get images for this product
+            const images = await conn.query(`
+              SELECT ImageType, ImagePath, ImageOrder 
+              FROM product_images 
+              WHERE ProductId = ? AND IsActive = 'Y' 
+              ORDER BY ImageOrder ASC
+            `, [productId]);
+            
+            if (images && images.length > 0) {
+              // Try to get main image first, otherwise use the first available image
+              const mainImg = images.find(img => img.ImageType === 'main');
+              const thumbnailImg = images.find(img => img.ImageType === 'thumbnail');
+              
+              if (mainImg) {
+                model.mainImage = mainImg.ImagePath;
+                model.thumbnail = mainImg.ImagePath;
+              } else if (thumbnailImg) {
+                model.mainImage = thumbnailImg.ImagePath;
+                model.thumbnail = thumbnailImg.ImagePath;
+              } else {
+                // Use first available image
+                model.mainImage = images[0].ImagePath;
+                model.thumbnail = images[0].ImagePath;
+              }
+              
+              console.log(`Model ${model.ModelId} using image: ${model.mainImage}`);
+            } else {
+              console.log(`Model ${model.ModelId} has no images available`);
+            }
+          } else {
+            console.log(`Model ${model.ModelId} has no products`);
+          }
+        } catch (err) {
+          console.log('Image query error:', err.message);
+        }
       } catch (err) {
         console.log('Product count/pricing error:', err.message);
       }
@@ -394,6 +443,56 @@ router.get('/category/:categoryId', async (req, res) => {
       } catch (err) {
         console.log('Sizes query error:', err.message);
       }
+      
+      // Get the first available product's image for the model thumbnail in this category
+      try {
+        const firstProduct = await conn.query(`
+          SELECT p.ProductId
+          FROM Product p
+          WHERE p.Model = ? AND p.ProductCategory_Gen = ? AND p.Model > 0
+            AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+          ORDER BY p.ProductId ASC
+          LIMIT 1
+        `, [model.ModelId, req.params.categoryId]);
+        
+        if (firstProduct && firstProduct.length > 0) {
+          const productId = firstProduct[0].ProductId;
+          
+          // Get images for this product
+          const images = await conn.query(`
+            SELECT ImageType, ImagePath, ImageOrder 
+            FROM product_images 
+            WHERE ProductId = ? AND IsActive = 'Y' 
+            ORDER BY ImageOrder ASC
+          `, [productId]);
+          
+          if (images && images.length > 0) {
+            // Try to get main image first, otherwise use the first available image
+            const mainImg = images.find(img => img.ImageType === 'main');
+            const thumbnailImg = images.find(img => img.ImageType === 'thumbnail');
+            
+            if (mainImg) {
+              model.mainImage = mainImg.ImagePath;
+              model.thumbnail = mainImg.ImagePath;
+            } else if (thumbnailImg) {
+              model.mainImage = thumbnailImg.ImagePath;
+              model.thumbnail = thumbnailImg.ImagePath;
+            } else {
+              // Use first available image
+              model.mainImage = images[0].ImagePath;
+              model.thumbnail = images[0].ImagePath;
+            }
+            
+            console.log(`Model ${model.ModelId} in category ${req.params.categoryId} using image: ${model.mainImage}`);
+          } else {
+            console.log(`Model ${model.ModelId} in category ${req.params.categoryId} has no images available`);
+          }
+        } else {
+          console.log(`Model ${model.ModelId} in category ${req.params.categoryId} has no products`);
+        }
+      } catch (err) {
+        console.log('Image query error for category:', err.message);
+      }
     }
     
     conn.release();
@@ -578,37 +677,118 @@ router.get('/:modelId/products/:productId/vendors', async (req, res) => {
     
     console.log(`Fetching vendors for product ${req.params.productId}`);
     
-    // Get all vendors selling this product with their pricing
-    const vendorPricing = await conn.query(`
-      SELECT 
-        vp.*,
-        v.Name AS VendorName,
-        v.Email AS VendorEmail,
-        v.PhoneNumber AS VendorPhone,
-        c.Name AS CourierName
-      FROM VendorProduct vp
-      LEFT JOIN Vendor v ON vp.Vendor = v.VendorId
-      LEFT JOIN Courier c ON vp.Courier = c.CourierId
-      WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
-      ORDER BY vp.MRP_SS ASC
-    `, [req.params.productId]);
-    
-    console.log(`Found ${vendorPricing.length} vendors for product ${req.params.productId}`);
-    
-    // Calculate total available stock across all vendors
-    let totalStock = 0;
-    if (vendorPricing && vendorPricing.length > 0) {
-      vendorPricing.forEach(vendor => {
-        totalStock += Number(vendor.StockQty) || 0;
+    // First check if vendor-related tables exist
+    try {
+      await conn.query('SELECT 1 FROM VendorProduct LIMIT 1');
+    } catch (err) {
+      console.log('VendorProduct table not accessible:', err.message);
+      conn.release();
+      return res.json({ 
+        vendors: [],
+        totalStock: 0,
+        vendorCount: 0
       });
     }
     
-    conn.release();
-    res.json({ 
-      vendors: vendorPricing || [],
-      totalStock: totalStock,
-      vendorCount: vendorPricing ? vendorPricing.length : 0
-    });
+    try {
+      await conn.query('SELECT 1 FROM Vendor LIMIT 1');
+    } catch (err) {
+      console.log('Vendor table does not exist, returning vendor product data only');
+      
+      // Get vendor products without vendor details
+      const vendorPricing = await conn.query(`
+        SELECT 
+          vp.*,
+          'Unknown Vendor' AS VendorName,
+          '' AS VendorEmail,
+          '' AS VendorPhone,
+          'Unknown Courier' AS CourierName
+        FROM VendorProduct vp
+        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
+        ORDER BY vp.MRP_SS ASC
+      `, [req.params.productId]);
+      
+      console.log(`Found ${vendorPricing.length} vendor products (no vendor details available)`);
+      
+      let totalStock = 0;
+      if (vendorPricing && vendorPricing.length > 0) {
+        vendorPricing.forEach(vendor => {
+          totalStock += Number(vendor.StockQty) || 0;
+        });
+      }
+      
+      conn.release();
+      return res.json({ 
+        vendors: vendorPricing || [],
+        totalStock: totalStock,
+        vendorCount: vendorPricing ? vendorPricing.length : 0
+      });
+    }
+    
+    // If both tables exist, get full vendor details
+    try {
+      const vendorPricing = await conn.query(`
+        SELECT 
+          vp.*,
+          v.Name AS VendorName,
+          v.Email AS VendorEmail,
+          v.PhoneNumber AS VendorPhone,
+          c.Name AS CourierName
+        FROM VendorProduct vp
+        LEFT JOIN Vendor v ON vp.Vendor = v.VendorId
+        LEFT JOIN Courier c ON vp.Courier = c.CourierId
+        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
+        ORDER BY vp.MRP_SS ASC
+      `, [req.params.productId]);
+      
+      console.log(`Found ${vendorPricing.length} vendors for product ${req.params.productId}`);
+      
+      // Calculate total available stock across all vendors
+      let totalStock = 0;
+      if (vendorPricing && vendorPricing.length > 0) {
+        vendorPricing.forEach(vendor => {
+          totalStock += Number(vendor.StockQty) || 0;
+        });
+      }
+      
+      conn.release();
+      res.json({ 
+        vendors: vendorPricing || [],
+        totalStock: totalStock,
+        vendorCount: vendorPricing ? vendorPricing.length : 0
+      });
+    } catch (vendorQueryError) {
+      console.log('Vendor query failed (likely missing Courier table):', vendorQueryError.message);
+      
+      // Fallback to VendorProduct data only without Courier details
+      const vendorPricing = await conn.query(`
+        SELECT 
+          vp.*,
+          'Unknown Vendor' AS VendorName,
+          '' AS VendorEmail,
+          '' AS VendorPhone,
+          'Unknown Courier' AS CourierName
+        FROM VendorProduct vp
+        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
+        ORDER BY vp.MRP_SS ASC
+      `, [req.params.productId]);
+      
+      console.log(`Found ${vendorPricing.length} vendor products (fallback mode)`);
+      
+      let totalStock = 0;
+      if (vendorPricing && vendorPricing.length > 0) {
+        vendorPricing.forEach(vendor => {
+          totalStock += Number(vendor.StockQty) || 0;
+        });
+      }
+      
+      conn.release();
+      res.json({ 
+        vendors: vendorPricing || [],
+        totalStock: totalStock,
+        vendorCount: vendorPricing ? vendorPricing.length : 0
+      });
+    }
   } catch (err) {
     console.error('Error fetching vendor pricing:', err.message);
     console.error('Full error:', err);

@@ -44,7 +44,7 @@ interface FilterOptions {
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
-export default function ProductsPage() {
+export default function ModelsPage() {
   const searchParams = useSearchParams()
   const categoryId = searchParams.get('categoryId')
 
@@ -65,12 +65,18 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchModels()
     fetchFilterOptions()
-  }, [])
+  }, []) // Only run once on mount
 
   useEffect(() => {
+    // This runs when categoryId changes (including when it becomes null for "All Products")
     if (categoryId) {
       setFilters(prev => ({ ...prev, category: categoryId }))
+    } else {
+      // Reset filters when going to "All Products"
+      setFilters(prev => ({ ...prev, category: '' }))
     }
+    // Always re-fetch models when categoryId changes (including null)
+    fetchModels()
   }, [categoryId])
 
   useEffect(() => {
@@ -80,15 +86,22 @@ export default function ProductsPage() {
   async function fetchModels() {
     try {
       setLoading(true)
+      console.log('Fetching models for categoryId:', categoryId)
+      
       const url = categoryId 
         ? `${API}/models/category/${categoryId}`
         : `${API}/models`
       
+      console.log('API URL:', url)
+      
       const response = await fetch(url)
       const data = await response.json()
       
+      console.log('API Response:', data)
+      
       if (response.ok) {
         setModels(data.models || [])
+        console.log('Set models:', data.models?.length || 0)
       } else {
         console.error('Failed to fetch models:', data.error)
         setModels([])
@@ -344,4 +357,3 @@ export default function ProductsPage() {
     </div>
   )
 }
-

@@ -123,7 +123,7 @@ export default function ModelDetailPage() {
         }
         if (data.model.availableSizes.length > 0) {
           // Check if there's a size with value 0 (no size applicable)
-          const noSizeOption = data.model.availableSizes.find(size => size.SizeId === 0)
+          const noSizeOption = data.model.availableSizes.find((size: SizeOption) => size.SizeId === 0)
           if (noSizeOption) {
             setSelectedSize(0) // Auto-select "no size" for products like watches
           } else {
@@ -210,7 +210,7 @@ export default function ModelDetailPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-600 mb-4">Model not found</h1>
-          <Link href="/products">
+          <Link href="/models">
             <Button>Back to Models</Button>
           </Link>
         </div>
@@ -230,7 +230,7 @@ export default function ModelDetailPage() {
         <ol className="flex items-center space-x-2 text-sm text-gray-500">
           <li><Link href="/" className="hover:text-blue-600">Home</Link></li>
           <li>/</li>
-          <li><Link href="/products" className="hover:text-blue-600">Models</Link></li>
+          <li><Link href="/models" className="hover:text-blue-600">Models</Link></li>
           <li>/</li>
           <li className="text-gray-900">{model.Model}</li>
         </ol>
@@ -352,14 +352,28 @@ export default function ModelDetailPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-500">In Stock</div>
-                  <div className="font-semibold">{totalStock} units available</div>
+                  {totalStock > 0 ? (
+                    <>
+                      <div className="text-sm text-green-600">In Stock</div>
+                      <div className="font-semibold">{totalStock} units available</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm text-red-600">Out of Stock</div>
+                      <div className="font-semibold text-gray-500">Not available</div>
+                    </>
+                  )}
                 </div>
               </div>
               
-              <Button size="lg" className="w-full">
+              <Button 
+                size="lg" 
+                className="w-full" 
+                disabled={totalStock === 0}
+                variant={totalStock === 0 ? "outline" : "default"}
+              >
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart
+                {totalStock > 0 ? "Add to Cart" : "Out of Stock"}
               </Button>
             </div>
           ) : selectedColor && selectedSize ? (

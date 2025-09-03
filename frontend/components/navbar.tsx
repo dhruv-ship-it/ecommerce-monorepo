@@ -187,13 +187,13 @@ export function Navbar() {
             </SheetTrigger>
             <SheetContent side="left" className="w-80">
               <div className="flex flex-col space-y-4 mt-4">
-                <Link href="/products" className="text-lg font-medium">
+                <Link href="/models" className="text-lg font-medium">
                   All Products
                 </Link>
                 {Array.isArray(categories) && categories.map((category) => (
                   <Link 
                     key={category.ProductCategoryId} 
-                    href={`/products?categoryId=${category.ProductCategoryId}`} 
+                    href={`/models?categoryId=${category.ProductCategoryId}`} 
                     className="text-lg font-medium"
                   >
                     {category.ProductCategory}
@@ -213,7 +213,7 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/products" className="text-sm font-medium hover:text-blue-600">
+            <Link href="/models" className="text-sm font-medium hover:text-blue-600">
               All Products
             </Link>
             <DropdownMenu>
@@ -221,7 +221,7 @@ export function Navbar() {
               <DropdownMenuContent>
                 {Array.isArray(categories) && categories.map((category) => (
                   <DropdownMenuItem key={category.ProductCategoryId} asChild>
-                    <Link href={`/products?categoryId=${category.ProductCategoryId}`}>
+                    <Link href={`/models?categoryId=${category.ProductCategoryId}`}>
                       {category.ProductCategory}
                     </Link>
                   </DropdownMenuItem>

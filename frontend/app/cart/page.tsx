@@ -62,7 +62,7 @@ export default function CartPage() {
         <ShoppingBag className="mx-auto h-24 w-24 text-muted-foreground mb-4" />
         <h1 className="text-2xl font-bold mb-2">Your cart is empty</h1>
         <p className="text-muted-foreground mb-6">Add some items to get started</p>
-        <Link href="/products">
+        <Link href="/models">
           <Button>Continue Shopping</Button>
         </Link>
       </div>
@@ -175,7 +175,7 @@ export default function CartPage() {
                 </Button>
               </Link>
 
-              <Link href="/products">
+              <Link href="/models">
                 <Button variant="outline" className="w-full bg-transparent">
                   Continue Shopping
                 </Button>
