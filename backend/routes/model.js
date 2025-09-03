@@ -691,52 +691,29 @@ router.get('/:modelId/products/:productId/vendors', async (req, res) => {
     }
     
     try {
-      await conn.query('SELECT 1 FROM Vendor LIMIT 1');
+      await conn.query('SELECT 1 FROM user LIMIT 1');
     } catch (err) {
-      console.log('Vendor table does not exist, returning vendor product data only');
-      
-      // Get vendor products without vendor details
-      const vendorPricing = await conn.query(`
-        SELECT 
-          vp.*,
-          'Unknown Vendor' AS VendorName,
-          '' AS VendorEmail,
-          '' AS VendorPhone,
-          'Unknown Courier' AS CourierName
-        FROM VendorProduct vp
-        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
-        ORDER BY vp.MRP_SS ASC
-      `, [req.params.productId]);
-      
-      console.log(`Found ${vendorPricing.length} vendor products (no vendor details available)`);
-      
-      let totalStock = 0;
-      if (vendorPricing && vendorPricing.length > 0) {
-        vendorPricing.forEach(vendor => {
-          totalStock += Number(vendor.StockQty) || 0;
-        });
-      }
-      
+      console.log('User table does not exist:', err.message);
       conn.release();
       return res.json({ 
-        vendors: vendorPricing || [],
-        totalStock: totalStock,
-        vendorCount: vendorPricing ? vendorPricing.length : 0
+        vendors: [],
+        totalStock: 0,
+        vendorCount: 0
       });
     }
     
-    // If both tables exist, get full vendor details
+    // Get vendor products with user details
     try {
       const vendorPricing = await conn.query(`
         SELECT 
           vp.*,
-          v.Name AS VendorName,
-          v.Email AS VendorEmail,
-          v.PhoneNumber AS VendorPhone,
-          c.Name AS CourierName
+          COALESCE(v.User, 'Unknown Vendor') AS VendorName,
+          COALESCE(v.UserEmail, '') AS VendorEmail,
+          COALESCE(v.UserMobile, '') AS VendorPhone,
+          COALESCE(c.User, 'Unknown Courier') AS CourierName
         FROM VendorProduct vp
-        LEFT JOIN Vendor v ON vp.Vendor = v.VendorId
-        LEFT JOIN Courier c ON vp.Courier = c.CourierId
+        LEFT JOIN user v ON vp.Vendor = v.UserId AND v.IsVendor = 'Y'
+        LEFT JOIN user c ON vp.Courier = c.UserId AND c.IsCourier = 'Y'
         WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
         ORDER BY vp.MRP_SS ASC
       `, [req.params.productId]);
@@ -758,36 +735,9 @@ router.get('/:modelId/products/:productId/vendors', async (req, res) => {
         vendorCount: vendorPricing ? vendorPricing.length : 0
       });
     } catch (vendorQueryError) {
-      console.log('Vendor query failed (likely missing Courier table):', vendorQueryError.message);
-      
-      // Fallback to VendorProduct data only without Courier details
-      const vendorPricing = await conn.query(`
-        SELECT 
-          vp.*,
-          'Unknown Vendor' AS VendorName,
-          '' AS VendorEmail,
-          '' AS VendorPhone,
-          'Unknown Courier' AS CourierName
-        FROM VendorProduct vp
-        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL) AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
-        ORDER BY vp.MRP_SS ASC
-      `, [req.params.productId]);
-      
-      console.log(`Found ${vendorPricing.length} vendor products (fallback mode)`);
-      
-      let totalStock = 0;
-      if (vendorPricing && vendorPricing.length > 0) {
-        vendorPricing.forEach(vendor => {
-          totalStock += Number(vendor.StockQty) || 0;
-        });
-      }
-      
+      console.error('Error fetching vendor pricing:', vendorQueryError.message);
       conn.release();
-      res.json({ 
-        vendors: vendorPricing || [],
-        totalStock: totalStock,
-        vendorCount: vendorPricing ? vendorPricing.length : 0
-      });
+      res.status(500).json({ error: 'Server error', details: vendorQueryError.message });
     }
   } catch (err) {
     console.error('Error fetching vendor pricing:', err.message);

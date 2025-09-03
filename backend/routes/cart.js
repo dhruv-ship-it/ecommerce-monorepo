@@ -16,87 +16,160 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// Get all items in the customer's cart
+// Get all items in the customer's cart with vendor details
 router.get('/', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
   try {
     const conn = await db.getConnection();
-    const [items] = await conn.query(
-      'SELECT ShoppingCartId, ProductId, Quantity FROM ShoppingCart WHERE CustomerId = ?',
-      [req.user.id]
-    );
+    const items = await conn.query(`
+      SELECT 
+        sc.ShoppingCartId,
+        sc.ProductId,
+        sc.VendorProductId,
+        sc.Quantity,
+        p.Product AS ProductName,
+        vp.MRP_SS,
+        vp.Discount,
+        vp.GST_SS,
+        vp.StockQty,
+        v.User AS VendorName,
+        c.User AS CourierName,
+        col.Color AS ColorName,
+        s.Size AS SizeName,
+        m.Model AS ModelName
+      FROM ShoppingCart sc
+      LEFT JOIN Product p ON sc.ProductId = p.ProductId
+      LEFT JOIN VendorProduct vp ON sc.VendorProductId = vp.VendorProductId
+      LEFT JOIN user v ON vp.Vendor = v.UserId AND v.IsVendor = 'Y'
+      LEFT JOIN user c ON vp.Courier = c.UserId AND c.IsCourier = 'Y'
+      LEFT JOIN Color col ON p.Color = col.ColorId
+      LEFT JOIN Size s ON p.Size = s.SizeId
+      LEFT JOIN Model m ON p.Model = m.ModelId
+      WHERE sc.CustomerId = ?
+      ORDER BY sc.RecordCreationTimeStamp DESC
+    `, [req.user.id]);
     conn.release();
-    res.json({ cart: items });
+    res.json({ cart: items || [] });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Cart fetch error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
 // Add item to cart (if exists, update quantity)
 router.post('/add', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
-  const { productId, quantity } = req.body;
-  if (!productId || !quantity) return res.status(400).json({ error: 'Missing fields' });
+  const { vendorProductId, productId, quantity } = req.body;
+  if (!vendorProductId || !productId || !quantity) {
+    return res.status(400).json({ error: 'Missing required fields: vendorProductId, productId, quantity' });
+  }
+  
   try {
     const conn = await db.getConnection();
-    // Check if item already in cart
-    const [existing] = await conn.query(
-      'SELECT ShoppingCartId, Quantity FROM ShoppingCart WHERE CustomerId = ? AND ProductId = ?',
-      [req.user.id, productId]
+    
+    // Verify vendor product exists and has stock
+    const vendorProduct = await conn.query(
+      'SELECT StockQty FROM VendorProduct WHERE VendorProductId = ? AND Product = ? AND (IsDeleted != "Y" OR IsDeleted IS NULL) AND (IsNotAvailable != "Y" OR IsNotAvailable IS NULL)',
+      [vendorProductId, productId]
     );
-    if (existing) {
+    
+    if (!vendorProduct || vendorProduct.length === 0) {
+      conn.release();
+      return res.status(400).json({ error: 'Vendor product not found or unavailable' });
+    }
+    
+    if (vendorProduct[0].StockQty < quantity) {
+      conn.release();
+      return res.status(400).json({ error: 'Insufficient stock available' });
+    }
+    
+    // Check if item already in cart (same vendor product)
+    const existing = await conn.query(
+      'SELECT ShoppingCartId, Quantity FROM ShoppingCart WHERE CustomerId = ? AND VendorProductId = ?',
+      [req.user.id, vendorProductId]
+    );
+    
+    if (existing && existing.length > 0) {
       // Update quantity
+      const newQuantity = Number(existing[0].Quantity) + Number(quantity);
+      if (newQuantity > vendorProduct[0].StockQty) {
+        conn.release();
+        return res.status(400).json({ error: `Cannot add ${quantity} more. Maximum available: ${vendorProduct[0].StockQty - existing[0].Quantity}` });
+      }
+      
       await conn.query(
-        'UPDATE ShoppingCart SET Quantity = Quantity + ? WHERE ShoppingCartId = ?',
-        [quantity, existing.ShoppingCartId]
+        'UPDATE ShoppingCart SET Quantity = ? WHERE ShoppingCartId = ?',
+        [newQuantity, existing[0].ShoppingCartId]
       );
     } else {
       // Insert new item
       await conn.query(
-        'INSERT INTO ShoppingCart (CustomerId, ProductId, Quantity) VALUES (?, ?, ?)',
-        [req.user.id, productId, quantity]
+        'INSERT INTO ShoppingCart (CustomerId, ProductId, VendorProductId, Quantity, RecordCreationLogin) VALUES (?, ?, ?, ?, ?)',
+        [req.user.id, productId, vendorProductId, quantity, req.user.username || 'customer']
       );
     }
+    
     conn.release();
-    res.json({ message: 'Cart updated' });
+    res.json({ message: 'Cart updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Add to cart error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
 // Update quantity of an item in cart
 router.put('/update', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
-  const { productId, quantity } = req.body;
-  if (!productId || !quantity) return res.status(400).json({ error: 'Missing fields' });
+  const { vendorProductId, quantity } = req.body;
+  if (!vendorProductId || !quantity) return res.status(400).json({ error: 'Missing vendorProductId or quantity' });
+  
   try {
     const conn = await db.getConnection();
+    
+    // Verify stock availability
+    const vendorProduct = await conn.query(
+      'SELECT StockQty FROM VendorProduct WHERE VendorProductId = ?',
+      [vendorProductId]
+    );
+    
+    if (!vendorProduct || vendorProduct.length === 0) {
+      conn.release();
+      return res.status(400).json({ error: 'Vendor product not found' });
+    }
+    
+    if (vendorProduct[0].StockQty < quantity) {
+      conn.release();
+      return res.status(400).json({ error: 'Insufficient stock available' });
+    }
+    
     await conn.query(
-      'UPDATE ShoppingCart SET Quantity = ? WHERE CustomerId = ? AND ProductId = ?',
-      [quantity, req.user.id, productId]
+      'UPDATE ShoppingCart SET Quantity = ? WHERE CustomerId = ? AND VendorProductId = ?',
+      [quantity, req.user.id, vendorProductId]
     );
     conn.release();
     res.json({ message: 'Cart item updated' });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Update cart error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
 // Remove item from cart
 router.delete('/remove', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
-  const { productId } = req.body;
-  if (!productId) return res.status(400).json({ error: 'Missing productId' });
+  const { vendorProductId } = req.body;
+  if (!vendorProductId) return res.status(400).json({ error: 'Missing vendorProductId' });
   try {
     const conn = await db.getConnection();
     await conn.query(
-      'DELETE FROM ShoppingCart WHERE CustomerId = ? AND ProductId = ?',
-      [req.user.id, productId]
+      'DELETE FROM ShoppingCart WHERE CustomerId = ? AND VendorProductId = ?',
+      [req.user.id, vendorProductId]
     );
     conn.release();
     res.json({ message: 'Item removed from cart' });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Remove from cart error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 

@@ -81,6 +81,7 @@ export default function ModelDetailPage() {
   const [selectedSize, setSelectedSize] = useState<number | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [vendors, setVendors] = useState<VendorInfo[]>([])
+  const [selectedVendor, setSelectedVendor] = useState<VendorInfo | null>(null)
   const [totalStock, setTotalStock] = useState(0)
   const [loading, setLoading] = useState(true)
   const [productLoading, setProductLoading] = useState(false)
@@ -99,12 +100,15 @@ export default function ModelDetailPage() {
     } else {
       setSelectedProduct(null)
       setVendors([])
+      setTotalStock(0)
     }
   }, [selectedColor, selectedSize])
 
   useEffect(() => {
     if (selectedProduct) {
       fetchVendorPricing()
+    } else {
+      setSelectedVendor(null) // Clear vendor selection when product changes
     }
   }, [selectedProduct])
 
@@ -153,11 +157,15 @@ export default function ModelDetailPage() {
         setSelectedImageIndex(0)
       } else {
         setSelectedProduct(null)
+        setVendors([]) // Clear vendors when product doesn't exist
+        setTotalStock(0) // Clear stock when product doesn't exist
         console.log('Product not available for this color/size combination')
       }
     } catch (error) {
       console.error('Error fetching specific product:', error)
       setSelectedProduct(null)
+      setVendors([]) // Clear vendors on error
+      setTotalStock(0) // Clear stock on error
     } finally {
       setProductLoading(false)
     }
@@ -173,15 +181,65 @@ export default function ModelDetailPage() {
       if (response.ok) {
         setVendors(data.vendors || [])
         setTotalStock(data.totalStock || 0)
+        // Auto-select first vendor if only one available
+        if (data.vendors && data.vendors.length === 1) {
+          setSelectedVendor(data.vendors[0])
+        } else {
+          setSelectedVendor(null)
+        }
       } else {
         console.error('Failed to fetch vendor pricing:', data.error)
         setVendors([])
         setTotalStock(0)
+        setSelectedVendor(null)
       }
     } catch (error) {
       console.error('Error fetching vendor pricing:', error)
       setVendors([])
       setTotalStock(0)
+      setSelectedVendor(null)
+    }
+  }
+
+  async function handleAddToCart(vendor: VendorInfo) {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      alert('Please login before adding items to cart')
+      // Optionally redirect to login page
+      // window.location.href = '/auth/signin'
+      return
+    }
+
+    try {
+      const response = await fetch(`${API}/cart/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          vendorProductId: vendor.VendorProductId,
+          productId: selectedProduct?.ProductId,
+          quantity: 1
+        })
+      })
+
+      const data = await response.json()
+      
+      if (response.ok) {
+        alert('Item added to cart successfully!')
+        // Optionally update UI or redirect to cart
+      } else {
+        if (response.status === 401) {
+          alert('Session expired. Please login again.')
+          localStorage.removeItem('token')
+        } else {
+          alert(data.error || 'Failed to add item to cart')
+        }
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+      alert('Failed to add item to cart. Please try again.')
     }
   }
 
@@ -365,16 +423,6 @@ export default function ModelDetailPage() {
                   )}
                 </div>
               </div>
-              
-              <Button 
-                size="lg" 
-                className="w-full" 
-                disabled={totalStock === 0}
-                variant={totalStock === 0 ? "outline" : "default"}
-              >
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                {totalStock > 0 ? "Add to Cart" : "Out of Stock"}
-              </Button>
             </div>
           ) : selectedColor && selectedSize ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
@@ -385,33 +433,90 @@ export default function ModelDetailPage() {
         </div>
       </div>
 
-      {/* Vendor Pricing */}
+      {/* Vendor Selection and Pricing */}
       {vendors.length > 0 && (
         <Card className="mb-8">
           <CardContent className="p-6">
-            <h3 className="text-xl font-bold mb-4">Available from {vendors.length} vendor{vendors.length > 1 ? 's' : ''}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <h3 className="text-xl font-bold mb-4">Select Vendor ({vendors.length} available)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               {vendors.map((vendor) => (
-                <div key={vendor.VendorProductId} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="font-semibold">{vendor.VendorName}</h4>
-                      <p className="text-sm text-gray-600">{vendor.CourierName}</p>
+                <div 
+                  key={vendor.VendorProductId} 
+                  className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                    selectedVendor?.VendorProductId === vendor.VendorProductId 
+                      ? 'border-blue-600 bg-blue-50 shadow-md' 
+                      : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                  }`}
+                  onClick={() => setSelectedVendor(vendor)}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <input
+                          type="radio"
+                          name="vendor"
+                          checked={selectedVendor?.VendorProductId === vendor.VendorProductId}
+                          onChange={() => setSelectedVendor(vendor)}
+                          className="text-blue-600"
+                        />
+                        <h4 className="font-semibold">{vendor.VendorName}</h4>
+                      </div>
+                      <p className="text-sm text-gray-600">via {vendor.CourierName}</p>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-lg">₹{vendor.MRP_SS.toLocaleString()}</div>
+                      <div className="font-bold text-lg text-blue-600">₹{vendor.MRP_SS.toLocaleString()}</div>
                       {vendor.Discount > 0 && (
                         <div className="text-sm text-green-600">-{vendor.Discount}% off</div>
                       )}
                     </div>
                   </div>
                   <div className="flex justify-between items-center text-sm text-gray-500">
-                    <span>{vendor.StockQty} in stock</span>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      vendor.StockQty > 10 ? 'bg-green-100 text-green-800' :
+                      vendor.StockQty > 0 ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {vendor.StockQty > 0 ? `${vendor.StockQty} in stock` : 'Out of stock'}
+                    </span>
                     <span>+₹{vendor.GST_SS} GST</span>
                   </div>
+                  {selectedVendor?.VendorProductId === vendor.VendorProductId && (
+                    <div className="mt-2 p-2 bg-blue-100 rounded text-sm text-blue-800">
+                      ✓ Selected vendor
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+            
+            {selectedVendor && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-semibold">Selected: {selectedVendor.VendorName}</h4>
+                    <p className="text-sm text-gray-600">Total: ₹{(selectedVendor.MRP_SS + selectedVendor.GST_SS).toLocaleString()}</p>
+                  </div>
+                  <Button 
+                    size="lg" 
+                    className="px-8"
+                    disabled={selectedVendor.StockQty === 0}
+                    onClick={() => handleAddToCart(selectedVendor)}
+                  >
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                    {selectedVendor.StockQty > 0 ? "Add to Cart" : "Out of Stock"}
+                  </Button>
+                </div>
+                {selectedVendor.StockQty === 0 && (
+                  <p className="text-sm text-red-600">This vendor is currently out of stock for this product.</p>
+                )}
+              </div>
+            )}
+            
+            {!selectedVendor && (
+              <div className="border-t pt-4 text-center text-gray-500">
+                <p>Please select a vendor to add this product to your cart</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
