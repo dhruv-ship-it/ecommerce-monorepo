@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ShoppingCart, Heart, Star, Package, Shield, Recycle, Droplets, Flame } from "lucide-react"
+import { ShoppingCart, Heart, Star, Package, Shield, Recycle, Droplets, Flame, Plus, Minus } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -82,6 +82,7 @@ export default function ModelDetailPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [vendors, setVendors] = useState<VendorInfo[]>([])
   const [selectedVendor, setSelectedVendor] = useState<VendorInfo | null>(null)
+  const [quantity, setQuantity] = useState(1)
   const [totalStock, setTotalStock] = useState(0)
   const [loading, setLoading] = useState(true)
   const [productLoading, setProductLoading] = useState(false)
@@ -101,6 +102,7 @@ export default function ModelDetailPage() {
       setSelectedProduct(null)
       setVendors([])
       setTotalStock(0)
+      setQuantity(1) // Reset quantity when product changes
     }
   }, [selectedColor, selectedSize])
 
@@ -220,14 +222,14 @@ export default function ModelDetailPage() {
         body: JSON.stringify({
           vendorProductId: vendor.VendorProductId,
           productId: selectedProduct?.ProductId,
-          quantity: 1
+          quantity: quantity
         })
       })
 
       const data = await response.json()
       
       if (response.ok) {
-        alert('Item added to cart successfully!')
+        alert(`${quantity} item(s) added to cart successfully!`)
         // Optionally update UI or redirect to cart
       } else {
         if (response.status === 401) {
@@ -447,7 +449,10 @@ export default function ModelDetailPage() {
                       ? 'border-blue-600 bg-blue-50 shadow-md' 
                       : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                   }`}
-                  onClick={() => setSelectedVendor(vendor)}
+                  onClick={() => {
+                    setSelectedVendor(vendor)
+                    setQuantity(1) // Reset quantity when vendor changes
+                  }}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
@@ -456,7 +461,10 @@ export default function ModelDetailPage() {
                           type="radio"
                           name="vendor"
                           checked={selectedVendor?.VendorProductId === vendor.VendorProductId}
-                          onChange={() => setSelectedVendor(vendor)}
+                          onChange={() => {
+                            setSelectedVendor(vendor)
+                            setQuantity(1)
+                          }}
                           className="text-blue-600"
                         />
                         <h4 className="font-semibold">{vendor.VendorName}</h4>
@@ -492,22 +500,48 @@ export default function ModelDetailPage() {
             {selectedVendor && (
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-semibold">Selected: {selectedVendor.VendorName}</h4>
-                    <p className="text-sm text-gray-600">Total: ₹{(selectedVendor.MRP_SS + selectedVendor.GST_SS).toLocaleString()}</p>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <h4 className="font-semibold">Selected: {selectedVendor.VendorName}</h4>
+                      <p className="text-sm text-gray-600">Total: ₹{((selectedVendor.MRP_SS + selectedVendor.GST_SS) * quantity).toLocaleString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Quantity:</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        disabled={quantity <= 1}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="px-4 py-2 border rounded-md min-w-[60px] text-center font-semibold">{quantity}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setQuantity(Math.min(selectedVendor.StockQty, quantity + 1))}
+                        disabled={quantity >= selectedVendor.StockQty}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm text-gray-500 ml-2">({selectedVendor.StockQty} available)</span>
+                    </div>
                   </div>
                   <Button 
                     size="lg" 
                     className="px-8"
-                    disabled={selectedVendor.StockQty === 0}
+                    disabled={selectedVendor.StockQty === 0 || quantity > selectedVendor.StockQty}
                     onClick={() => handleAddToCart(selectedVendor)}
                   >
                     <ShoppingCart className="h-5 w-5 mr-2" />
-                    {selectedVendor.StockQty > 0 ? "Add to Cart" : "Out of Stock"}
+                    {selectedVendor.StockQty > 0 ? `Add ${quantity} to Cart` : "Out of Stock"}
                   </Button>
                 </div>
                 {selectedVendor.StockQty === 0 && (
                   <p className="text-sm text-red-600">This vendor is currently out of stock for this product.</p>
+                )}
+                {quantity > selectedVendor.StockQty && (
+                  <p className="text-sm text-red-600">Only {selectedVendor.StockQty} units available from this vendor.</p>
                 )}
               </div>
             )}
