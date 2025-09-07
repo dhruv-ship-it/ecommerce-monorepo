@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation"
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 interface OrderTracking {
-  VendorProductCustomerCourierId: number;
+  PurchaseId: number;
   Customer: number;
   Product: number;
   Vendor: number;
@@ -151,7 +151,7 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-xl">Order #{trackingInfo.VendorProductCustomerCourierId}</CardTitle>
+                  <CardTitle className="text-xl">Order #{trackingInfo.PurchaseId}</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     Placed on {new Date(trackingInfo.OrderDate).toLocaleDateString()}
                   </p>
@@ -283,6 +283,10 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
     </div>
   )
 }
+
+
+
+
 
 
 

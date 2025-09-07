@@ -25,8 +25,12 @@ interface Order {
   Vendor: number
   Courier: number
   TrackingNo: string
+  IsReady_for_Pickup_by_Courier: string
+  Ready_for_Pickup_by_CourierTimeStamp: string
   IsPicked_by_Courier: string
   Picked_by_CourierTimeStamp: string
+  IsDispatched: string
+  DispatchedTimeStamp: string
   IsOut_for_Delivery: string
   Out_for_DeliveryTimeStamp: string
   IsDelivered: string
@@ -237,7 +241,7 @@ export default function OrderHistoryPage() {
                     Shop More
                   </Button>
                 </div>
-                {order.OrderStatus !== 'Pending' && (
+                {order.Vendor && order.Courier && (
                   <div className="mt-4 pt-4 border-t">
                     <h3 className="font-medium mb-2">Tracking Details</h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
@@ -250,10 +254,26 @@ export default function OrderHistoryPage() {
                         <p>{order.TrackingNo || 'Not available'}</p>
                       </div>
                       <div>
+                        <p className="text-muted-foreground">Ready for Pickup</p>
+                        <p>
+                          {order.IsReady_for_Pickup_by_Courier === 'Y' 
+                            ? new Date(order.Ready_for_Pickup_by_CourierTimeStamp).toLocaleString() 
+                            : 'No'}
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-muted-foreground">Picked by Courier</p>
                         <p>
                           {order.IsPicked_by_Courier === 'Y' 
                             ? new Date(order.Picked_by_CourierTimeStamp).toLocaleString() 
+                            : 'No'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Dispatched</p>
+                        <p>
+                          {order.IsDispatched === 'Y'
+                            ? new Date(order.DispatchedTimeStamp).toLocaleString()
                             : 'No'}
                         </p>
                       </div>

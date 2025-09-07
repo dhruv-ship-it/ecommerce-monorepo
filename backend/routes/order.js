@@ -75,12 +75,12 @@ router.post('/place', authMiddleware, async (req, res) => {
         // Create order entry in vendorproductcustomercourier table
         await conn.query(
           `INSERT INTO vendorproductcustomercourier 
-           (Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
+           (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
             OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
             IsPicked_by_Courier, IsDispatched, IsOut_for_Delivery, IsDelivered, 
             IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
-          [customerId, item.ProductId, vendor.Vendor, courierId, vendor.MRP_SS, vendor.Discount_SS, vendor.GST_SS, item.Quantity, customerId]
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
+          [purchaseId, customerId, item.ProductId, vendor.Vendor, courierId, vendor.MRP_SS, vendor.Discount_SS, vendor.GST_SS, item.Quantity, customerId]
         );
         
         // Set up 30-minute timeout for courier acceptance
@@ -92,7 +92,7 @@ router.post('/place', authMiddleware, async (req, res) => {
             const timeoutConn = await db.getConnection();
             // Check if the order is still pending (courier not picked up)
             const rows = await timeoutConn.query(
-              'SELECT * FROM vendorproductcustomercourier WHERE VendorProductCustomerCourierId = ?',
+              'SELECT * FROM vendorproductcustomercourier WHERE PurchaseId = ?',
               [orderEntryId]
             );
             
@@ -116,11 +116,11 @@ router.post('/place', authMiddleware, async (req, res) => {
                 
                 // Update courier assignment
                 await timeoutConn.query(
-                  'UPDATE vendorproductcustomercourier SET Courier = ? WHERE VendorProductCustomerCourierId = ?',
-                  [newCourierId, orderEntryId]
+                  'UPDATE vendorproductcustomercourier SET Courier = ? WHERE PurchaseId = ?',
+                  [newCourierId, purchaseId]
                 );
                 
-                console.log(`Order ${orderEntryId} reassigned to courier ${newCourierId}`);
+                console.log(`Order ${purchaseId} reassigned to courier ${newCourierId}`);
               } else {
                 // No other couriers available, mark as no available courier
                 await timeoutConn.query(
@@ -130,16 +130,16 @@ router.post('/place', authMiddleware, async (req, res) => {
                 
                 // Clear courier assignment
                 await timeoutConn.query(
-                  'UPDATE vendorproductcustomercourier SET Courier = 0 WHERE VendorProductCustomerCourierId = ?',
-                  [orderEntryId]
+                  'UPDATE vendorproductcustomercourier SET Courier = 0 WHERE PurchaseId = ?',
+                  [purchaseId]
                 );
                 
-                console.log(`Order ${orderEntryId} marked as no courier available`);
+                console.log(`Order ${purchaseId} marked as no courier available`);
               }
             }
             timeoutConn.release();
           } catch (error) {
-            console.error(`Error in timeout handler for order ${orderEntryId}:`, error);
+            console.error(`Error in timeout handler for order ${purchaseId}:`, error);
           }
         }, 30 * 60 * 1000); // 30 minutes timeout
       }
@@ -168,16 +168,19 @@ router.get('/history', authMiddleware, async (req, res) => {
     
     const customerId = req.user.id;
     
-    // Modified query to include model information and tracking details for non-pending orders
+    // Modified query to include model information and tracking details for orders that exist in vendorproductcustomercourier
+    // Using INNER JOIN as per the requirement to only show orders with associated vendor and courier information
     const rows = await conn.query(
       `SELECT p.*, m.ModelId as ModelId, vpc.Vendor, vpc.Courier, vpc.TrackingNo, 
+       vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp,
        vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, 
+       vpc.IsDispatched, vpc.DispatchedTimeStamp,
        vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp,
        vpc.IsDelivered, vpc.DeliveryTimeStamp
        FROM purchase p
        JOIN product pr ON p.ProductId = pr.ProductId
        JOIN model m ON pr.Model = m.ModelId
-       LEFT JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.VendorProductCustomerCourierId
+       LEFT JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId
        WHERE p.CustomerId = ? 
        ORDER BY p.OrderDate DESC`,
       [customerId]
@@ -220,7 +223,15 @@ router.get('/:orderId', authMiddleware, async (req, res) => {
     const customerId = req.user.id;
     
     const rows = await conn.query(
-      'SELECT * FROM purchase WHERE PuchaseId = ? AND CustomerId = ?',
+      `SELECT p.*, vpc.Vendor, vpc.Courier, vpc.TrackingNo, 
+       vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp,
+       vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, 
+       vpc.IsDispatched, vpc.DispatchedTimeStamp,
+       vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp,
+       vpc.IsDelivered, vpc.DeliveryTimeStamp
+       FROM purchase p
+       LEFT JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId
+       WHERE p.PuchaseId = ? AND p.CustomerId = ?`,
       [req.params.orderId, customerId]
     );
     conn.release();
@@ -267,7 +278,7 @@ router.get('/:orderId/tracking', authMiddleware, async (req, res) => {
       'v.User as VendorName, v.UserMobile as VendorMobile, ' +
       'u.User as CourierName, u.UserMobile as CourierMobile ' +
       'FROM purchase p ' +
-      'JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.VendorProductCustomerCourierId ' +
+      'JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN product pr ON vpc.Product = pr.ProductId ' +
       'JOIN customer c ON vpc.Customer = c.CustomerId ' +
       'JOIN user v ON vpc.Vendor = v.UserId ' +

@@ -1094,6 +1094,59 @@ CREATE TABLE `VendorProductCustomerCourier` (
 --
 -- Dumping data for table `VendorProductCustomerCourier`
 --
+-- =====================================================
+-- Step 1: Truncate both tables
+-- =====================================================
+TRUNCATE TABLE vendorproductcustomercourier;
+TRUNCATE TABLE purchase;
+
+-- =====================================================
+-- Step 2: Alter vendorproductcustomercourier to add PurchaseId
+-- =====================================================
+ALTER TABLE vendorproductcustomercourier
+ADD COLUMN PurchaseId INT(8) UNSIGNED NOT NULL AFTER VendorProductCustomerCourierId;
+
+-- Add foreign key
+ALTER TABLE vendorproductcustomercourier
+ADD CONSTRAINT fk_vpcc_purchase
+FOREIGN KEY (PurchaseId) REFERENCES purchase(PuchaseId)
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- =====================================================
+-- Step 3: Insert sample purchases (from your old data, adjusted)
+-- =====================================================
+INSERT INTO purchase 
+(ProductId, CustomerId, OrderDate, OrderStatus, MRP, GST, Discount, TotalAmount, PaymentStatus, PaymentMode, RecordCreationLogin, LastUpdationLogin)
+VALUES
+(4, 29, NOW(), 'Pending',   12999.00, 18.00, 12.00, 13458.00, 'Pending',   'COD',         'customer', 'customer'),
+(1, 29, NOW(), 'Shipped',    8999.00, 18.00, 10.00,  9878.00, 'Completed', 'Credit Card', 'customer', 'customer');
+
+-- =====================================================
+-- Step 4: Insert into VPCC with PurchaseId reference
+-- =====================================================
+INSERT INTO vendorproductcustomercourier
+(PurchaseId, Customer, Product, MRP_SS, Discount_SS, GST_SS, PurchaseQty, Vendor, OrderCreationTimeStamp,
+ IsReady_for_Pickup_by_Courier, Ready_for_Pickup_by_CourierTimeStamp, Courier, TrackingNo, 
+ IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, DispatchedTimeStamp,
+ IsOut_for_Delivery, Out_for_DeliveryTimeStamp, IsDelivered, DeliveryTimeStamp,
+ IsPartialDelivery, IsReturned, ReturnTimeStamp, IsDeleted,
+ RecordCreationTimeStamp, RecordCreationLogin, LastUpdationLogin)
+VALUES
+-- Linked to PurchaseId=1
+(1, 29, 4, 12999.00, 12.00, 18.00, 1, 31, NOW(), 
+ 'Y', NOW(), 33, 'TRK001234',
+ 'Y', NOW(), 'N', NOW(),
+ 'N', NOW(), 'N', NOW(),
+ 'N', 'N', NOW(), 'N',
+ NOW(), 'admin', 'admin'),
+
+-- Linked to PurchaseId=2
+(2, 29, 1, 8999.00, 10.00, 18.00, 5, 31, NOW(),
+ 'Y', NOW(), 33, 'TRK005678',
+ 'Y', NOW(), 'Y', NOW(),
+ 'N', NOW(), 'N', NOW(),
+ 'N', 'N', NOW(), 'N',
+ NOW(), 'admin', 'admin');
 
 LOCK TABLES `VendorProductCustomerCourier` WRITE;
 /*!40000 ALTER TABLE `VendorProductCustomerCourier` DISABLE KEYS */;

@@ -24,7 +24,7 @@ interface Order {
 
 // Define the order item interface
 interface OrderItem {
-  VendorProductCustomerCourierId: number;
+  PurchaseId: number;
   Customer: number;
   Product: number;
   Vendor: number;
@@ -242,6 +242,8 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
     </div>
   )
 }
+
+
 
 
 

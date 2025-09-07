@@ -221,7 +221,7 @@ router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => 
     const conn = await db.getConnection();
     const [orders] = await conn.query(`
       SELECT 
-        vpc.VendorProductCustomerCourierId as PuchaseId,
+        vpc.PurchaseId as PuchaseId,
         vpc.Product as ProductId,
         p.Product,
         p.MRP as ProductPrice,
@@ -285,7 +285,7 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
     
     // Verify vendor owns this order
     const [orderCheck] = await conn.query(
-      'SELECT * FROM VendorProductCustomerCourier WHERE VendorProductCustomerCourierId = ? AND Vendor = ?',
+      'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Vendor = ?',
       [req.params.id, req.user.id]
     );
     
@@ -331,7 +331,7 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
     
     // Update VendorProductCustomerCourier table - Only assign courier, don't mark as ready
     await conn.query(
-      'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE VendorProductCustomerCourierId = ?',
+      'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE PurchaseId = ?',
       [courierId, req.params.id]
     );
     
@@ -349,7 +349,7 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
     
     // Verify vendor owns this order
     const [orderCheck] = await conn.query(
-      'SELECT * FROM VendorProductCustomerCourier WHERE VendorProductCustomerCourierId = ? AND Vendor = ?',
+      'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Vendor = ?',
       [req.params.id, req.user.id]
     );
     
@@ -374,7 +374,7 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
     
     // Update VendorProductCustomerCourier table
     await conn.query(
-      'UPDATE VendorProductCustomerCourier SET IsReady_for_Pickup_by_Courier = "Y", Ready_for_Pickup_by_CourierTimeStamp = NOW() WHERE VendorProductCustomerCourierId = ?',
+      'UPDATE VendorProductCustomerCourier SET IsReady_for_Pickup_by_Courier = "Y", Ready_for_Pickup_by_CourierTimeStamp = NOW() WHERE PurchaseId = ?',
       [req.params.id]
     );
     
@@ -423,7 +423,7 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
     
     if (updateFields.length > 0) {
       await conn.query(
-        `UPDATE VendorProductCustomerCourier SET ${updateFields.join(', ')} WHERE VendorProductCustomerCourierId = ?`,
+        `UPDATE VendorProductCustomerCourier SET ${updateFields.join(', ')} WHERE PurchaseId = ?`,
         [...updateValues, req.params.id]
       );
     }
@@ -434,7 +434,7 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
       'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.VendorProductCustomerCourierId ' +
+      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
       'WHERE p.PuchaseId = ? AND vpc.Vendor = ?',
@@ -469,7 +469,7 @@ router.get('/order/:id/tracking', authMiddleware, vendorOnlyMiddleware, async (r
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
       'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.VendorProductCustomerCourierId ' +
+      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
       'WHERE p.PuchaseId = ? AND vpc.Vendor = ?',
@@ -595,7 +595,7 @@ router.post('/order/:id/tracking', authMiddleware, vendorOnlyMiddleware, async (
     
     if (updateFields) {
       await conn.query(
-        `UPDATE VendorProductCustomerCourier SET ${updateFields} WHERE VendorProductCustomerCourierId = ?`,
+        `UPDATE VendorProductCustomerCourier SET ${updateFields} WHERE PurchaseId = ?`,
         [req.params.id]
       );
     }
@@ -616,7 +616,7 @@ router.get('/order/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) 
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
       'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.VendorProductCustomerCourierId ' +
+      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
       'WHERE p.PuchaseId = ? AND vpc.Vendor = ?',
