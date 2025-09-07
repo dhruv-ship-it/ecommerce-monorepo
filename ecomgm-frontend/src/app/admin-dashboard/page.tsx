@@ -1,46 +1,91 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
+
+interface User {
+  UserId: number;
+  User: string;
+  UserEmail: string;
+  UserMobile: string;
+  IsAdmin: string;
+  IsActivated: string;
+}
 
 export default function AdminDashboard() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
+  // Prevent hydration mismatch
   useEffect(() => {
-    const token = localStorage.getItem("admin_token");
-    if (!token) {
-      router.push("/");
-      return;
-    }
-    fetchUserProfile();
+    setMounted(true);
   }, []);
 
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    
+    // Validate auth before making request
+    if (!validateAuth()) {
+      performAutoLogout("/");
+      return;
+    }
+    
+    const validToken = getValidToken();
+    if (!validToken) {
+      performAutoLogout("/");
+      return;
+    }
+    
     try {
       const response = await fetch("http://localhost:4000/api/user/profile", {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("admin_token")}`,
+          Authorization: `Bearer ${validToken.token}`,
         },
       });
       const data = await response.json();
       if (response.ok) {
         setUser(data);
+      } else if (response.status === 401) {
+        // Token expired or invalid
+        performAutoLogout("/");
+        return;
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    
+    // Validate authentication on page load
+    if (!validateAuth()) {
+      performAutoLogout("/");
+      return;
+    }
+    
+    const validToken = getValidToken();
+    if (!validToken) {
+      performAutoLogout("/");
+      return;
+    }
+    
+    fetchUserProfile();
+  }, [router, fetchUserProfile, mounted]);
 
   const handleLogout = () => {
-    localStorage.removeItem("admin_token");
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem("admin_token");
+    }
     router.push("/");
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-xl">Loading...</div>

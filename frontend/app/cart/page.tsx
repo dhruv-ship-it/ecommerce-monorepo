@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator"
 import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { validateCustomerAuth, performCustomerLogout } from "../../utils/auth"
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -16,19 +17,29 @@ export default function CartPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
+    const isAuthenticated = validateCustomerAuth();
+    setIsLoggedIn(isAuthenticated);
   }, []);
 
   useEffect(() => {
     async function fetchCart() {
       setLoading(true);
+      
+      // Validate authentication
+      if (!validateCustomerAuth()) {
+        setCartItems([]);
+        setIsLoggedIn(false);
+        setLoading(false);
+        return;
+      }
+      
       const token = localStorage.getItem('token');
       if (!token) {
         setCartItems([]);
         setLoading(false);
         return;
       }
+      
       try {
         const res = await fetch(`${API}/cart`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -38,10 +49,8 @@ export default function CartPage() {
           setCartItems(data.cart);
         } else if (res.status === 401) {
           // Token expired or invalid
-          localStorage.removeItem('token');
-          setCartItems([]);
-          setIsLoggedIn(false);
-          alert('Session expired. Please login again.');
+          performCustomerLogout('/');
+          return;
         } else {
           setCartItems([]);
         }

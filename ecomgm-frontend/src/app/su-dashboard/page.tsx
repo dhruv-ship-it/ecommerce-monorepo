@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
 interface User {
   UserId: number;
@@ -71,37 +72,49 @@ export default function SUDashboard() {
   
   const router = useRouter();
 
-  useEffect(() => {
-    const token = localStorage.getItem("su_token");
-    if (!token) {
-      router.push("/");
-      return;
+  // Helper function to get authenticated token
+  const getAuthToken = (): string | null => {
+    if (!validateAuth()) {
+      performAutoLogout("/");
+      return null;
     }
-    fetchUsers();
-    fetchCustomers();
-  }, [userPage, customerPage]);
+    
+    const validToken = getValidToken();
+    if (!validToken) {
+      performAutoLogout("/");
+      return null;
+    }
+    
+    return validToken.token;
+  };
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    
     try {
       const response = await fetch(
         `http://localhost:4000/su/users?page=${userPage}&limit=10`,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("su_token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
       const data = await response.json();
       if (response.ok) {
-        setUsers(data.users || []);
+        // Ensure data.users is an array before using it
+        setUsers(Array.isArray(data.users) ? data.users : []);
         setUserTotal(data.total || 0);
+      } else if (response.status === 401) {
+        performAutoLogout("/");
       }
     } catch (error) {
       console.error("Error fetching users:", error);
     }
-  };
+  }, [userPage]);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     try {
       const response = await fetch(
         `http://localhost:4000/su/customers?page=${customerPage}&limit=10`,
@@ -113,7 +126,8 @@ export default function SUDashboard() {
       );
       const data = await response.json();
       if (response.ok) {
-        setCustomers(data.customers || []);
+        // Ensure data.customers is an array before using it
+        setCustomers(Array.isArray(data.customers) ? data.customers : []);
         setCustomerTotal(data.total || 0);
       }
     } catch (error) {
@@ -121,7 +135,24 @@ export default function SUDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerPage]);
+
+  useEffect(() => {
+    // Validate authentication on page load
+    if (!validateAuth()) {
+      performAutoLogout("/");
+      return;
+    }
+    
+    const validToken = getValidToken();
+    if (!validToken) {
+      performAutoLogout("/");
+      return;
+    }
+    
+    fetchUsers();
+    fetchCustomers();
+  }, [router, fetchUsers, fetchCustomers]);
 
   // Handle user creation
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -146,6 +177,7 @@ export default function SUDashboard() {
         setCreateError(data.error || "Failed to create user");
       }
     } catch (error) {
+      console.error('Error creating user:', error);
       setCreateError("Network error. Please try again.");
     }
   };
@@ -172,6 +204,7 @@ export default function SUDashboard() {
         setCreateError(data.error || "Failed to update user");
       }
     } catch (error) {
+      console.error('Error updating user:', error);
       setCreateError("Network error. Please try again.");
     }
   };
@@ -198,6 +231,7 @@ export default function SUDashboard() {
         setCreateError(data.error || "Failed to update customer");
       }
     } catch (error) {
+      console.error('Error updating customer:', error);
       setCreateError("Network error. Please try again.");
     }
   };
@@ -405,7 +439,7 @@ export default function SUDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
+                      {Array.isArray(users) && users.map((user) => (
                         <tr key={user.UserId}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {user.User}
@@ -519,7 +553,7 @@ export default function SUDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {customers.map((customer) => (
+                      {Array.isArray(customers) && customers.map((customer) => (
                         <tr key={customer.CustomerId}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {customer.Customer}
@@ -893,3 +927,10 @@ export default function SUDashboard() {
     </div>
   );
 } 
+
+
+
+
+
+
+

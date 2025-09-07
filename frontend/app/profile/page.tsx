@@ -7,6 +7,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/use-toast';
+import { validateCustomerAuth, performCustomerLogout, getCustomerFromToken } from '../../utils/auth';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -15,6 +16,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false); // New state for password change modal
   const { toast } = useToast();
 
   // Determine role and fetch profile
@@ -104,6 +106,37 @@ export default function ProfilePage() {
     }
   }
 
+  // Password change form
+  const passwordForm = useForm({ defaultValues: { oldPassword: '', newPassword: '', confirmNewPassword: '' } });
+  async function handleChangePassword(data: any) {
+    if (data.newPassword !== data.confirmNewPassword) {
+      toast({ title: 'Error', description: 'New passwords do not match', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/api/customer/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          oldPassword: data.oldPassword,
+          newPassword: data.newPassword,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        toast({ title: 'Password updated successfully' });
+        setChangePasswordOpen(false);
+        passwordForm.reset({ oldPassword: '', newPassword: '', confirmNewPassword: '' });
+      } else {
+        toast({ title: 'Error', description: json.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Password update failed', variant: 'destructive' });
+    }
+  }
+
   // User profile (read-only with badges and limited edit)
   const [editUserOpen, setEditUserOpen] = useState(false);
   const userEditForm = useForm({ defaultValues: { name: '', mobile: '', address: '', dob: '' } });
@@ -168,9 +201,14 @@ export default function ProfilePage() {
                 <div><b>Date of Birth:</b> {profile.DoB}</div>
                 <div><b>PIN:</b> {profile.CustomerPIN}</div>
               </div>
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
-                Edit Profile
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setEditOpen(true)}>
+                  Edit Profile
+                </Button>
+                <Button variant="outline" onClick={() => setChangePasswordOpen(true)}>
+                  Change Password
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -239,6 +277,41 @@ export default function ProfilePage() {
                   )} />
                   <Button type="submit" className="w-full">Save</Button>
                   <Button type="button" variant="outline" className="w-full" onClick={() => setEditOpen(false)}>Cancel</Button>
+                </form>
+              </Form>
+            </div>
+          </div>
+        )}
+        {/* Change Password Dialog */}
+        {changePasswordOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+            <div className="bg-white rounded-lg p-8 w-full max-w-lg shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Change Password</h2>
+              <Form {...passwordForm}>
+                <form onSubmit={passwordForm.handleSubmit(handleChangePassword)} className="space-y-4">
+                  <FormField control={passwordForm.control} name="oldPassword" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Password</FormLabel>
+                      <FormControl><Input type="password" {...field} required /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={passwordForm.control} name="newPassword" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>New Password</FormLabel>
+                      <FormControl><Input type="password" {...field} required minLength={6} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={passwordForm.control} name="confirmNewPassword" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm New Password</FormLabel>
+                      <FormControl><Input type="password" {...field} required minLength={6} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <Button type="submit" className="w-full">Change Password</Button>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setChangePasswordOpen(false)}>Cancel</Button>
                 </form>
               </Form>
             </div>

@@ -710,6 +710,56 @@ CREATE TABLE `SU` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `TrackingEvents`
+--
+
+DROP TABLE IF EXISTS `TrackingEvents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `TrackingEvents` (
+  `TrackingEventId` int(8) unsigned NOT NULL AUTO_INCREMENT,
+  `PurchaseId` int(8) NOT NULL DEFAULT 0,
+  `status` varchar(50) NOT NULL DEFAULT '',
+  `location` varchar(100) NOT NULL DEFAULT '',
+  `description` text NOT NULL,
+  `timestamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `IsDeleted` char(1) NOT NULL DEFAULT '',
+  `RecordCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `RecordCreationLogin` varchar(10) NOT NULL DEFAULT '',
+  `LastUpdationTimeStamp` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `LastUpdationLogin` varchar(10) NOT NULL DEFAULT '',
+  PRIMARY KEY (`TrackingEventId`),
+  KEY `purchase_id` (`PurchaseId`),
+  KEY `status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `VendorProductCustomerCourier`
+--
+
+DROP TABLE IF EXISTS `VendorProductCustomerCourier`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `VendorProductCustomerCourier` (
+  `VendorProductCustomerCourierId` int(8) unsigned NOT NULL AUTO_INCREMENT,
+  `VendorId` int(8) NOT NULL DEFAULT 0,
+  `ProductId` int(8) NOT NULL DEFAULT 0,
+  `CustomerId` int(8) NOT NULL DEFAULT 0,
+  `CourierId` int(8) NOT NULL DEFAULT 0,
+  `IsDeleted` char(1) NOT NULL DEFAULT '',
+  `RecordCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `RecordCreationLogin` varchar(10) NOT NULL DEFAULT '',
+  `LastUpdationTimeStamp` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `LastUpdationLogin` varchar(10) NOT NULL DEFAULT '',
+  PRIMARY KEY (`VendorProductCustomerCourierId`),
+  KEY `vendor_id` (`VendorId`),
+  KEY `product_id` (`ProductId`),
+  KEY `customer_id` (`CustomerId`),
+  KEY `courier_id` (`CourierId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 -- Dumping data for table `SU`
 --
 

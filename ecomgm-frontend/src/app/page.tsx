@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { validateAuth, performAutoLogout } from "@/utils/auth";
 
 export default function AdminLogin() {
   const [loginType, setLoginType] = useState<"su" | "user">("user");
@@ -11,7 +12,19 @@ export default function AdminLogin() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  // Prevent hydration mismatch by ensuring component is mounted on client
+  useEffect(() => {
+    setMounted(true);
+    
+    // Check for expired tokens on page load
+    if (!validateAuth()) {
+      // Clear any remaining tokens and redirect if needed
+      // Note: we don't redirect here as this is the login page
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +33,13 @@ export default function AdminLogin() {
 
     try {
       // Clear any existing tokens before login
-      localStorage.removeItem("token"); // customer portal token
-      localStorage.removeItem("su_token");
-      localStorage.removeItem("admin_token");
-      localStorage.removeItem("vendor_token");
-      localStorage.removeItem("courier_token");
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("token"); // customer portal token
+        localStorage.removeItem("su_token");
+        localStorage.removeItem("admin_token");
+        localStorage.removeItem("vendor_token");
+        localStorage.removeItem("courier_token");
+      }
       
       const endpoint = loginType === "su" ? "/api/auth/su-login" : "/api/auth/user-login";
       
@@ -44,34 +59,48 @@ export default function AdminLogin() {
       if (response.ok) {
         // Store token based on login type
         if (loginType === "su") {
-          localStorage.setItem("su_token", data.token);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem("su_token", data.token);
+          }
           router.push("/su-dashboard");
         } else {
           // Role-specific token storage
-          if (data.user.role === "admin") {
-            localStorage.setItem("admin_token", data.token);
-            router.push("/admin-dashboard");
-          } else if (data.user.role === "vendor") {
-            localStorage.setItem("vendor_token", data.token);
-            router.push("/vendor-dashboard");
-          } else if (data.user.role === "courier") {
-            localStorage.setItem("courier_token", data.token);
-            router.push("/courier-dashboard");
-          } else {
-            // Fallback: treat as generic user
-            localStorage.setItem("admin_token", data.token);
-            router.push("/admin-dashboard");
+          if (typeof window !== 'undefined') {
+            if (data.user.role === "admin") {
+              localStorage.setItem("admin_token", data.token);
+              router.push("/admin-dashboard");
+            } else if (data.user.role === "vendor") {
+              localStorage.setItem("vendor_token", data.token);
+              router.push("/vendor-dashboard");
+            } else if (data.user.role === "courier") {
+              localStorage.setItem("courier_token", data.token);
+              router.push("/courier-dashboard");
+            } else {
+              // Fallback: treat as generic user
+              localStorage.setItem("admin_token", data.token);
+              router.push("/admin-dashboard");
+            }
           }
         }
       } else {
         setError(data.message || "Login failed");
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('Login error:', error);
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Prevent hydration mismatch by only rendering after client mount
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

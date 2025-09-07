@@ -21,7 +21,7 @@ router.get('/', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
   try {
     const conn = await db.getConnection();
-    const items = await conn.query(`
+    const result = await conn.query(`
       SELECT 
         sc.ShoppingCartId,
         sc.ProductId,
@@ -49,7 +49,23 @@ router.get('/', authMiddleware, async (req, res) => {
       ORDER BY sc.RecordCreationTimeStamp DESC
     `, [req.user.id]);
     conn.release();
-    res.json({ cart: items || [] });
+    
+    // Handle the result properly - MariaDB returns an array where each element is a row
+    let cartItems = [];
+    if (Array.isArray(result)) {
+      // If first element is an array, it contains all rows
+      if (Array.isArray(result[0])) {
+        cartItems = result[0];
+      } else {
+        // Otherwise, each element is a row
+        cartItems = result;
+      }
+    } else if (result) {
+      // If it's a single object, make it an array
+      cartItems = [result];
+    }
+    
+    res.json({ cart: cartItems });
   } catch (err) {
     console.error('Cart fetch error:', err);
     res.status(500).json({ error: 'Server error', details: err.message });
@@ -180,8 +196,16 @@ router.get('/count', authMiddleware, async (req, res) => {
     const conn = await db.getConnection();
     const [result] = await conn.query('SELECT COUNT(*) as count FROM ShoppingCart WHERE CustomerId = ?', [req.user.id]);
     conn.release();
-    res.json({ count: result ? result.count : 0 });
+    
+    // Ensure we're accessing the count property correctly and convert BigInt to number
+    let count = 0;
+    if (result && typeof result === 'object') {
+      count = Number(result.count) || 0;
+    }
+    
+    res.json({ count });
   } catch (err) {
+    console.error('Cart count error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

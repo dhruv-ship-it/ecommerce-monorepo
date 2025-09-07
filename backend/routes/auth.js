@@ -36,7 +36,7 @@ router.post('/customer-login', async (req, res) => {
         email: customer.CustomerEmail, 
         role: 'customer', 
         userType: 'customer' 
-      }, process.env.JWT_SECRET, { expiresIn: '1d' });
+      }, process.env.JWT_SECRET, { expiresIn: '6h' });
       conn.release();
       console.log('DB connection released (customer login, success)');
       return res.json({ 
@@ -93,7 +93,7 @@ router.post('/user-login', async (req, res) => {
         email: user.UserEmail, 
         role, 
         userType: 'user' 
-      }, process.env.JWT_SECRET, { expiresIn: '1d' });
+      }, process.env.JWT_SECRET, { expiresIn: '6h' });
       conn.release();
       console.log('DB connection released (user login, success)');
       return res.json({ 
@@ -142,7 +142,7 @@ router.post('/su-login', async (req, res) => {
       username: su.SU, 
       role: 'su', 
       userType: 'su' 
-    }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    }, process.env.JWT_SECRET, { expiresIn: '6h' });
     conn.release();
     return res.json({ 
       token, 

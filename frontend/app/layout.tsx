@@ -11,7 +11,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "E-Commerce Store",
   description: "Amazon-style e-commerce application",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
 
 export default function RootLayout({
@@ -20,7 +23,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">  
+    <html lang="en">
+      <head>
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+      </head>
       <body className={inter.className}>
         <ClientSessionProvider>
           <Navbar />

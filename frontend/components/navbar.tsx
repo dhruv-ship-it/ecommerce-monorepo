@@ -19,6 +19,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useForm } from 'react-hook-form';
 import { useState as useReactState } from 'react';
+import { validateCustomerAuth, performCustomerLogout, getCustomerFromToken } from '../utils/auth';
 
 export function Navbar() {
   const API = process.env.NEXT_PUBLIC_API_URL;
@@ -31,16 +32,20 @@ export function Navbar() {
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
-    if (token) {
-      // Decode JWT to get customer info (or fetch from backend if needed)
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setCustomer(payload);
-      } catch {}
+    // Validate customer authentication on component mount
+    const isAuthenticated = validateCustomerAuth();
+    setIsLoggedIn(isAuthenticated);
+    
+    if (isAuthenticated) {
+      // Get customer info from token
+      const customerData = getCustomerFromToken();
+      setCustomer(customerData);
+      
       // Fetch cart count for logged-in customer
-      fetchCartCount(token);
+      const token = localStorage.getItem('token');
+      if (token) {
+        fetchCartCount(token);
+      }
     } else {
       setCustomer(null);
       setCartItemCount(0);
@@ -76,24 +81,32 @@ export function Navbar() {
   }
 
   async function fetchCartCount(token: string) {
+    // Validate auth before making request
+    if (!validateCustomerAuth()) {
+      performCustomerLogout('/');
+      return;
+    }
+    
     try {
       const res = await fetch(`${API}/cart/count`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (res.ok) setCartItemCount(data.count);
-      else setCartItemCount(0);
+      if (res.ok) {
+        setCartItemCount(data.count);
+      } else if (res.status === 401) {
+        // Token expired or invalid
+        performCustomerLogout('/');
+      } else {
+        setCartItemCount(0);
+      }
     } catch {
       setCartItemCount(0);
     }
   }
 
   function handleLogout() {
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
-    setCustomer(null);
-    setCartItemCount(0);
-    window.location.href = '/';
+    performCustomerLogout('/');
   }
 
   // Sign In form state
@@ -259,6 +272,10 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/profile">Profile</Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/order-history">Order History</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>Log Out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
