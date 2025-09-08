@@ -25,7 +25,7 @@ interface Courier {
   UserEmail: string;
 }
 
-export default function EditVendorProduct({ params }: { params: { id: string } }) {
+export default function EditVendorProduct({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const [product, setProduct] = useState<Product | null>(null);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [selectedCourier, setSelectedCourier] = useState<number | null>(null);
@@ -33,13 +33,26 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
   const [sellingPrice, setSellingPrice] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
   const [gst, setGst] = useState<number>(0);
-  const [isNotAvailable, setIsNotAvailable] = useState<string>('N');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
+    // Handle both Promise and resolved params
+    if (params instanceof Promise) {
+      params.then(resolved => {
+        setResolvedParams(resolved);
+      });
+    } else {
+      setResolvedParams(params);
+    }
+  }, [params]);
+
+  useEffect(() => {
+    if (!resolvedParams) return;
+
     // Validate authentication on page load
     if (!validateAuth()) {
       performAutoLogout("/");
@@ -55,7 +68,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
         }
         
         // Fetch product details
-        const productResponse = await fetch(`http://localhost:4000/vendor/products`, {
+        const productResponse = await fetch(`http://localhost:4000/vendor/products?id=${resolvedParams.id}`, {
           headers: {
             Authorization: `Bearer ${validToken.token}`,
           },
@@ -64,16 +77,15 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
         if (productResponse.ok) {
           const productsData = await productResponse.json();
           const products = Array.isArray(productsData.products) ? productsData.products : [];
-          const productToEdit = products.find((p: Product) => p.VendorProductId.toString() === params.id);
           
-          if (productToEdit) {
+          if (products.length > 0) {
+            const productToEdit = products[0]; // Since we're fetching by ID, there should only be one product
             setProduct(productToEdit);
-            setSelectedCourier(productToEdit.DefaultCourier);
-            setStockQty(productToEdit.StockQty);
-            setSellingPrice(productToEdit.MRP_SS);
-            setDiscount(productToEdit.Discount);
-            setGst(productToEdit.GST_SS);
-            setIsNotAvailable(productToEdit.IsNotAvailable);
+            setSelectedCourier(Number(productToEdit.DefaultCourier) || null);
+            setStockQty(Number(productToEdit.StockQty) || 0);
+            setSellingPrice(Number(productToEdit.MRP_SS) || 0);
+            setDiscount(Number(productToEdit.Discount) || 0);
+            setGst(Number(productToEdit.GST_SS) || 0);
           } else {
             setError("Product not found");
           }
@@ -96,19 +108,21 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
           performAutoLogout("/");
           return;
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching data:", error);
-        setError("Failed to load data");
+        setError("Failed to load data: " + (error?.message || "Unknown error"));
       } finally {
         setLoading(false);
       }
     };
     
     fetchData();
-  }, [params.id, router]);
+  }, [resolvedParams, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!resolvedParams) return;
     
     if (selectedCourier === null) {
       setError("Please select a courier");
@@ -145,7 +159,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/vendor/product/${params.id}`, {
+      const response = await fetch(`http://localhost:4000/vendor/product/${resolvedParams.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -157,7 +171,6 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
           sellingPrice,
           discount,
           gst,
-          isNotAvailable,
         }),
       });
       
@@ -170,7 +183,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
         const errorData = await response.json();
         setError(errorData.error || "Failed to update product");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating product:", error);
       setError("Failed to update product. Please check your network connection and try again.");
     } finally {
@@ -355,7 +368,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
                     <input
                       type="number"
                       value={stockQty}
-                      onChange={(e) => setStockQty(Number(e.target.value))}
+                      onChange={(e) => setStockQty(Number(e.target.value) || 0)}
                       min="0"
                       placeholder="Enter quantity"
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
@@ -369,7 +382,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
                     <input
                       type="number"
                       value={sellingPrice}
-                      onChange={(e) => setSellingPrice(Number(e.target.value))}
+                      onChange={(e) => setSellingPrice(Number(e.target.value) || 0)}
                       min="1"
                       step="0.01"
                       placeholder="Enter selling price"
@@ -384,7 +397,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
                     <input
                       type="number"
                       value={discount}
-                      onChange={(e) => setDiscount(Number(e.target.value))}
+                      onChange={(e) => setDiscount(Number(e.target.value) || 0)}
                       min="0"
                       max="100"
                       placeholder="Enter discount percentage"
@@ -399,7 +412,7 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
                     <input
                       type="number"
                       value={gst}
-                      onChange={(e) => setGst(Number(e.target.value))}
+                      onChange={(e) => setGst(Number(e.target.value) || 0)}
                       min="0"
                       max="100"
                       step="0.01"
@@ -409,54 +422,36 @@ export default function EditVendorProduct({ params }: { params: { id: string } }
                   </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Product Status
-                  </label>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="isNotAvailable"
-                      checked={isNotAvailable === 'Y'}
-                      onChange={(e) => setIsNotAvailable(e.target.checked ? 'Y' : 'N')}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="isNotAvailable" className="ml-2 block text-sm text-gray-900">
-                      Mark as Out of Stock
-                    </label>
-                  </div>
-                </div>
-                
                 {/* Price calculation preview */}
-                {(sellingPrice > 0 || discount > 0 || gst > 0) && (
+                {(Number(sellingPrice) > 0 || Number(discount) > 0 || Number(gst) > 0) && (
                   <div className="bg-gray-50 p-4 rounded-md">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">Price Calculation Preview</h4>
                     <div className="text-sm text-gray-600 space-y-1">
                       <div className="flex justify-between">
                         <span>Selling Price:</span>
-                        <span>₹{sellingPrice.toFixed(2)}</span>
+                        <span>₹{Number(sellingPrice).toFixed(2)}</span>
                       </div>
-                      {discount > 0 && (
+                      {Number(discount) > 0 && (
                         <div className="flex justify-between">
                           <span>Discount ({discount}%):</span>
-                          <span>-₹{(sellingPrice * discount / 100).toFixed(2)}</span>
+                          <span>-₹{(Number(sellingPrice) * Number(discount) / 100).toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between">
                         <span>Price after discount:</span>
-                        <span>₹{(sellingPrice - (sellingPrice * discount / 100)).toFixed(2)}</span>
+                        <span>₹{(Number(sellingPrice) - (Number(sellingPrice) * Number(discount) / 100)).toFixed(2)}</span>
                       </div>
-                      {gst > 0 && (
+                      {Number(gst) > 0 && (
                         <div className="flex justify-between">
                           <span>GST ({gst}%):</span>
-                          <span>+₹{((sellingPrice - (sellingPrice * discount / 100)) * gst / 100).toFixed(2)}</span>
+                          <span>+₹{((Number(sellingPrice) - (Number(sellingPrice) * Number(discount) / 100)) * Number(gst) / 100).toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-medium pt-2 border-t">
                         <span>Final Price:</span>
                         <span>₹{(
-                          (sellingPrice - (sellingPrice * discount / 100)) + 
-                          ((sellingPrice - (sellingPrice * discount / 100)) * gst / 100)
+                          (Number(sellingPrice) - (Number(sellingPrice) * Number(discount) / 100)) + 
+                          ((Number(sellingPrice) - (Number(sellingPrice) * Number(discount) / 100)) * Number(gst) / 100)
                         ).toFixed(2)}</span>
                       </div>
                     </div>

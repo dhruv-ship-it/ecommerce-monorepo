@@ -28,7 +28,11 @@ router.get('/products', authMiddleware, vendorOnlyMiddleware, async (req, res) =
     console.log('Vendor ID:', req.user.id);
     
     const conn = await db.getConnection();
-    const products = await conn.query(`
+    
+    // Check if a specific product ID is requested
+    const productId = req.query.id;
+    
+    let query = `
       SELECT 
         p.*, 
         vp.VendorProductId, 
@@ -44,7 +48,17 @@ router.get('/products', authMiddleware, vendorOnlyMiddleware, async (req, res) =
       JOIN VendorProduct vp ON p.ProductId = vp.Product 
       LEFT JOIN User u ON vp.Courier = u.UserId AND u.IsCourier = 'Y' AND u.IsBlackListed != 'Y'
       WHERE vp.Vendor = ? AND vp.IsDeleted != 'Y'
-    `, [req.user.id]);
+    `;
+    
+    let queryParams = [req.user.id];
+    
+    // If a specific product ID is requested, filter by it
+    if (productId) {
+      query += ' AND vp.VendorProductId = ?';
+      queryParams.push(productId);
+    }
+    
+    const products = await conn.query(query, queryParams);
     
     console.log('Raw products result:', JSON.stringify(products, null, 2));
     console.log('Products type:', typeof products);
@@ -302,7 +316,7 @@ router.put('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res
   if (sellingPrice !== undefined && sellingPrice <= 0) return res.status(400).json({ error: 'Invalid selling price' });
   if (discount !== undefined && (discount < 0 || discount > 100)) return res.status(400).json({ error: 'Invalid discount percentage' });
   if (gst !== undefined && (gst < 0 || gst > 100)) return res.status(400).json({ error: 'Invalid GST percentage' });
-  if (isNotAvailable !== undefined && isNotAvailable !== 'Y' && isNotAvailable !== 'N') return res.status(400).json({ error: 'Invalid availability status' });
+  // Remove the isNotAvailable validation since we're handling it automatically
   
   try {
     const conn = await db.getConnection();
@@ -353,11 +367,11 @@ router.put('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res
     if (stockQty !== undefined) {
       updates.push('StockQty = ?');
       values.push(stockQty);
-    }
-    if (isNotAvailable !== undefined) {
+      // Automatically set IsNotAvailable based on stock quantity
       updates.push('IsNotAvailable = ?');
-      values.push(isNotAvailable);
+      values.push(stockQty === 0 ? 'Y' : 'N');
     }
+    // Remove the manual isNotAvailable check since we're handling it automatically based on stock
     
     // Always update the last modification login
     updates.push('LastUpdationLogin = ?');

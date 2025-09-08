@@ -104,6 +104,12 @@ export default function VendorDashboard() {
               </h1>
             </div>
             <div className="flex items-center">
+              <button
+                onClick={() => router.push('/vendor-dashboard/profile')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 mr-2"
+              >
+                Profile
+              </button>
               <span className="text-sm text-gray-700 mr-4">
                 Welcome, {user?.User || "Vendor"}
               </span>
@@ -118,67 +124,21 @@ export default function VendorDashboard() {
         </div>
       </nav>
       
-      {/* Sidebar */}
-      <div className="bg-gray-100 min-h-screen w-64 fixed top-16 left-0 pt-6 pb-4">
-        <div className="px-4 space-y-6">
-          <div className="flex flex-col space-y-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-              Navigation
-            </h2>
-            <button
-              onClick={() => router.push('/vendor-dashboard')}
-              className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-md"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => router.push('/vendor-dashboard/products')}
-              className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-md"
-            >
-              Manage Products
-            </button>
-            <button
-              onClick={() => router.push('/vendor-dashboard/orders')}
-              className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-md"
-            >
-              Orders
-            </button>
-            <button
-              onClick={() => router.push('/vendor-dashboard/analytics')}
-              className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-md"
-            >
-              Analytics
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8" style={{marginLeft: "16rem"}}>
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                 Vendor Dashboard
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="text-sm font-medium text-blue-800">My Products</h4>
-                  <p className="text-2xl font-bold text-blue-900">0</p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="text-sm font-medium text-green-800">Active Orders</h4>
-                  <p className="text-2xl font-bold text-green-900">0</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <h4 className="text-sm font-medium text-purple-800">Total Sales</h4>
-                  <p className="text-2xl font-bold text-purple-900">$0</p>
-                </div>
-              </div>
               
               <div className="mt-8">
                 <h4 className="text-md font-medium text-gray-900 mb-4">Quick Actions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
+                  <button 
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                    onClick={() => router.push('/vendor-dashboard/products')}
+                  >
                     <h5 className="font-medium text-gray-900">Manage Products</h5>
                     <p className="text-sm text-gray-500">Add, edit, or remove products</p>
                   </button>
@@ -189,24 +149,13 @@ export default function VendorDashboard() {
                     <h5 className="font-medium text-gray-900">View Orders</h5>
                     <p className="text-sm text-gray-500">Track order status and fulfillment</p>
                   </button>
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
-                    <h5 className="font-medium text-gray-900">Inventory</h5>
-                    <p className="text-sm text-gray-500">Manage stock levels</p>
-                  </button>
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
+                  <button 
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                    onClick={() => router.push('/vendor-dashboard/analytics')}
+                  >
                     <h5 className="font-medium text-gray-900">Analytics</h5>
                     <p className="text-sm text-gray-500">View sales and performance data</p>
                   </button>
-                </div>
-              </div>
-              
-              {/* New Orders Section */}
-              <div className="mt-8">
-                <h4 className="text-md font-medium text-gray-900 mb-4">New Orders</h4>
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:p-6">
-                    <p className="text-sm text-gray-500">No new orders available.</p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -215,4 +164,4 @@ export default function VendorDashboard() {
       </div>
     </div>
   );
-} 
+}

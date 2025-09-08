@@ -24,6 +24,8 @@ export default function VendorProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [productToDelete, setProductToDelete] = useState<{id: number, name: string} | null>(null); // For delete confirmation modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); // For delete confirmation modal
   const router = useRouter();
 
   useEffect(() => {
@@ -97,12 +99,14 @@ export default function VendorProducts() {
   };
 
   const handleDeleteProduct = (vendorProductId: number, productName: string) => {
-    if (window.confirm(`Are you sure you want to remove "${productName}" from your catalog?`)) {
-      deleteProduct(vendorProductId);
-    }
+    // Open confirmation modal instead of directly deleting
+    setProductToDelete({id: vendorProductId, name: productName});
+    setIsDeleteModalOpen(true);
   };
 
-  const deleteProduct = async (vendorProductId: number) => {
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    
     try {
       const validToken = getValidToken();
       if (!validToken) {
@@ -110,7 +114,7 @@ export default function VendorProducts() {
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/vendor/product/${vendorProductId}`, {
+      const response = await fetch(`http://localhost:4000/vendor/product/${productToDelete.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${validToken.token}`,
@@ -119,18 +123,33 @@ export default function VendorProducts() {
       
       if (response.ok) {
         // Remove the product from the state
-        setProducts(products.filter(product => product.VendorProductId !== vendorProductId));
+        setProducts(products.filter(product => product.VendorProductId !== productToDelete.id));
         setSuccessMessage("Product removed from your catalog successfully");
+        // Close the modal
+        setIsDeleteModalOpen(false);
+        setProductToDelete(null);
       } else if (response.status === 401) {
         performAutoLogout("/");
       } else {
         const errorData = await response.json();
         setError(errorData.error || "Failed to remove product");
+        // Close the modal
+        setIsDeleteModalOpen(false);
+        setProductToDelete(null);
       }
     } catch (error) {
       console.error("Error removing product:", error);
       setError("Failed to remove product. Please check your network connection and try again.");
+      // Close the modal
+      setIsDeleteModalOpen(false);
+      setProductToDelete(null);
     }
+  };
+
+  const cancelDeleteProduct = () => {
+    // Close the modal and reset the product to delete
+    setIsDeleteModalOpen(false);
+    setProductToDelete(null);
   };
 
   if (loading) {
@@ -168,6 +187,42 @@ export default function VendorProducts() {
           </div>
         </div>
       </nav>
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && productToDelete && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mt-4">Confirm Deletion</h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500">
+                  Are you sure you want to remove <span className="font-semibold">"{productToDelete.name}"</span> from your catalog? 
+                  This action will mark the product as deleted but won't remove order history.
+                </p>
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={confirmDeleteProduct}
+                  className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md w-32 mr-2 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={cancelDeleteProduct}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md w-32 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
@@ -286,12 +341,6 @@ export default function VendorProducts() {
                                 className="text-blue-600 hover:text-blue-900"
                               >
                                 Edit
-                              </button>
-                              <button
-                                onClick={() => router.push(`/vendor-dashboard/products/${product.ProductId}/orders`)}
-                                className="text-indigo-600 hover:text-indigo-900"
-                              >
-                                View Orders
                               </button>
                               <button
                                 onClick={() => handleDeleteProduct(product.VendorProductId, product.Product)}
