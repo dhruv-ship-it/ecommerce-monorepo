@@ -24,18 +24,58 @@ function vendorOnlyMiddleware(req, res, next) {
 // Get vendor's products with default courier info
 router.get('/products', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   try {
+    console.log('=== DEBUG: Vendor Products Request ===');
+    console.log('Vendor ID:', req.user.id);
+    
     const conn = await db.getConnection();
-    const [products] = await conn.query(`
-      SELECT p.*, vp.VendorProductId, vp.Courier as DefaultCourier, vp.MRP_SS, vp.Discount, vp.GST_SS, vp.StockQty, vp.IsNotAvailable,
-             u.User as CourierName, u.UserMobile as CourierMobile
+    const products = await conn.query(`
+      SELECT 
+        p.*, 
+        vp.VendorProductId, 
+        vp.Courier as DefaultCourier, 
+        COALESCE(vp.MRP_SS, 0) as MRP_SS, 
+        COALESCE(vp.Discount, 0) as Discount, 
+        COALESCE(vp.GST_SS, 0) as GST_SS, 
+        COALESCE(vp.StockQty, 0) as StockQty, 
+        COALESCE(vp.IsNotAvailable, 'N') as IsNotAvailable,
+        COALESCE(u.User, 'Not Assigned') as CourierName, 
+        u.UserMobile as CourierMobile
       FROM Product p 
       JOIN VendorProduct vp ON p.ProductId = vp.Product 
-      LEFT JOIN User u ON vp.Courier = u.UserId
+      LEFT JOIN User u ON vp.Courier = u.UserId AND u.IsCourier = 'Y' AND u.IsBlackListed != 'Y'
       WHERE vp.Vendor = ? AND vp.IsDeleted != 'Y'
     `, [req.user.id]);
+    
+    console.log('Raw products result:', JSON.stringify(products, null, 2));
+    console.log('Products type:', typeof products);
+    console.log('Products is array:', Array.isArray(products));
+    console.log('Products length:', Array.isArray(products) ? products.length : 'N/A');
+    
+    // Handle different possible return formats
+    let productsData = [];
+    if (Array.isArray(products)) {
+      // Check if it's an array of arrays (MariaDB format) or array of objects
+      if (products.length > 0 && Array.isArray(products[0])) {
+        // MariaDB returns [data, metadata] format
+        productsData = products[0];
+      } else {
+        // Direct array of objects
+        productsData = products;
+      }
+    } else if (products && typeof products === 'object') {
+      // Single object result
+      productsData = [products];
+    }
+    
+    console.log('Processed products data:', JSON.stringify(productsData, null, 2));
+    console.log('Vendor products count:', productsData.length);
+    console.log('=== END DEBUG: Vendor Products Request ===');
+    
     conn.release();
-    res.json({ products });
+    res.json({ products: productsData });
   } catch (err) {
+    console.error('Vendor products error:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -46,41 +86,138 @@ router.get('/available-products', authMiddleware, vendorOnlyMiddleware, async (r
   try {
     conn = await db.getConnection();
     
-    // First, check if Product table exists and get all products
-    const allProductsResult = await conn.query(`
-      SELECT ProductId, Product, MRP, ProductCategory_Gen, ProductSubCategory
-      FROM Product 
-      ORDER BY Product
-    `);
-    console.log('Raw allProductsResult:', allProductsResult);
-    const allProducts = allProductsResult[0] || [];
-    console.log('Processed allProducts:', allProducts);
+    console.log('=== DEBUG: Available Products Request ===');
+    console.log('Vendor ID:', req.user.id);
     
-    console.log(`Found ${allProducts ? allProducts.length : 'undefined'} total products in Product table`);
+    // First, check if Product table exists and get all products with more details
+    const allProducts = await conn.query(`
+      SELECT 
+        p.ProductId, 
+        p.Product, 
+        p.MRP, 
+        p.ProductCategory_Gen, 
+        p.ProductSubCategory,
+        COALESCE(pc.ProductCategory, 'Unknown Category') as CategoryName,
+        COALESCE(psc.ProductSubCategory, 'Unknown Subcategory') as SubCategoryName
+      FROM Product p
+      LEFT JOIN ProductCategory pc ON p.ProductCategory_Gen = pc.ProductCategoryId
+      LEFT JOIN ProductSubCategory psc ON p.ProductSubCategory = psc.ProductSubCategoryId
+      WHERE p.IsDeleted = '' OR p.IsDeleted = 'N'
+      ORDER BY p.Product
+    `);
+    
+    console.log('All products type:', typeof allProducts);
+    console.log('All products is array:', Array.isArray(allProducts));
+    console.log('All products length:', Array.isArray(allProducts) ? allProducts.length : 'N/A');
+    
+    // Handle different possible return formats
+    let allProductsData = [];
+    if (Array.isArray(allProducts)) {
+      // Check if it's an array of arrays (MariaDB format) or array of objects
+      if (allProducts.length > 0 && Array.isArray(allProducts[0])) {
+        // MariaDB returns [data, metadata] format
+        allProductsData = allProducts[0];
+      } else {
+        // Direct array of objects
+        allProductsData = allProducts;
+      }
+    } else if (allProducts && typeof allProducts === 'object') {
+      // Single object result
+      allProductsData = [allProducts];
+    }
+    
+    console.log('All products count:', allProductsData.length);
+    console.log('Found', allProductsData.length, 'total products in Product table');
     
     // Then get products this vendor already has
-    const vendorProductsResult = await conn.query(`
+    const vendorProducts = await conn.query(`
       SELECT DISTINCT Product FROM VendorProduct 
       WHERE Vendor = ? AND IsDeleted != 'Y'
     `, [req.user.id]);
-    console.log('Raw vendorProductsResult:', vendorProductsResult);
-    const vendorProducts = vendorProductsResult[0] || [];
-    console.log('Processed vendorProducts:', vendorProducts);
     
-    console.log(`Vendor ${req.user.id} has ${vendorProducts.length} products already`);
+    console.log('Vendor products type:', typeof vendorProducts);
+    console.log('Vendor products is array:', Array.isArray(vendorProducts));
+    console.log('Vendor products length:', Array.isArray(vendorProducts) ? vendorProducts.length : 'N/A');
+    
+    // Handle different possible return formats
+    let vendorProductsData = [];
+    if (Array.isArray(vendorProducts)) {
+      // Check if it's an array of arrays (MariaDB format) or array of objects
+      if (vendorProducts.length > 0 && Array.isArray(vendorProducts[0])) {
+        // MariaDB returns [data, metadata] format
+        vendorProductsData = vendorProducts[0];
+      } else {
+        // Direct array of objects
+        vendorProductsData = vendorProducts;
+      }
+    } else if (vendorProducts && typeof vendorProducts === 'object') {
+      // Single object result
+      vendorProductsData = [vendorProducts];
+    }
+    
+    console.log('Vendor products count:', vendorProductsData.length);
+    console.log(`Vendor ${req.user.id} has ${vendorProductsData.length} products already`);
     
     // Filter out products vendor already has
-    const vendorProductIds = Array.isArray(vendorProducts) ? vendorProducts.map(vp => vp.Product) : [];
-    const availableProducts = Array.isArray(allProducts) ? allProducts.filter(p => !vendorProductIds.includes(p.ProductId)) : [];
+    // Convert vendor product IDs to numbers for proper comparison
+    const vendorProductIds = vendorProductsData.map(vp => Number(vp.Product));
+    console.log('Vendor product IDs:', vendorProductIds);
     
+    const availableProducts = allProductsData.filter(p => !vendorProductIds.includes(Number(p.ProductId)));
+    console.log('Available products count:', availableProducts.length);
     console.log(`Available products for vendor: ${availableProducts.length}`);
+    console.log('=== END DEBUG: Available Products Request ===');
     
     conn.release();
     res.json({ products: availableProducts });
   } catch (err) {
     console.error('Available products error:', err);
+    console.error('Error stack:', err.stack);
     if (conn) conn.release();
     res.status(500).json({ error: 'Server error', details: err.message });
+  }
+});
+
+// Get available couriers for assignment
+router.get('/couriers', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
+  try {
+    console.log('=== DEBUG: Couriers Request ===');
+    
+    const conn = await db.getConnection();
+    const couriers = await conn.query(
+      'SELECT UserId, User, UserMobile, UserEmail FROM User WHERE IsCourier = "Y" AND IsBlackListed != "Y"'
+    );
+    
+    console.log('Raw couriers result:', JSON.stringify(couriers, null, 2));
+    console.log('Couriers type:', typeof couriers);
+    console.log('Couriers is array:', Array.isArray(couriers));
+    
+    // Handle different possible return formats for MariaDB
+    let couriersData = [];
+    if (Array.isArray(couriers)) {
+      // Check if it's an array of arrays (MariaDB format) or array of objects
+      if (couriers.length > 0 && Array.isArray(couriers[0])) {
+        // MariaDB returns [data, metadata] format
+        couriersData = couriers[0];
+      } else {
+        // Direct array of objects
+        couriersData = couriers;
+      }
+    } else if (couriers && typeof couriers === 'object') {
+      // Single object result
+      couriersData = [couriers];
+    }
+    
+    console.log('Processed couriers data:', JSON.stringify(couriersData, null, 2));
+    console.log('Couriers count:', couriersData.length);
+    console.log('=== END DEBUG: Couriers Request ===');
+    
+    conn.release();
+    res.json({ couriers: couriersData });
+  } catch (err) {
+    console.error('Couriers error:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -88,6 +225,13 @@ router.get('/available-products', authMiddleware, vendorOnlyMiddleware, async (r
 router.post('/product/add-existing', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   const { productId, stockQty, sellingPrice, discount, gst, defaultCourierId } = req.body;
   if (!productId) return res.status(400).json({ error: 'Missing productId' });
+  
+  // Validate input parameters
+  if (stockQty === undefined || stockQty <= 0) return res.status(400).json({ error: 'Invalid stock quantity' });
+  if (sellingPrice === undefined || sellingPrice <= 0) return res.status(400).json({ error: 'Invalid selling price' });
+  if (discount === undefined || discount < 0 || discount > 100) return res.status(400).json({ error: 'Invalid discount percentage' });
+  if (gst === undefined || gst < 0 || gst > 100) return res.status(400).json({ error: 'Invalid GST percentage' });
+  if (defaultCourierId === undefined || defaultCourierId <= 0) return res.status(400).json({ error: 'Invalid courier' });
   
   try {
     const conn = await db.getConnection();
@@ -99,6 +243,16 @@ router.post('/product/add-existing', authMiddleware, vendorOnlyMiddleware, async
       return res.status(404).json({ error: 'Product not found in catalog' });
     }
     
+    // Verify courier exists and is not blacklisted
+    const [courier] = await conn.query(
+      'SELECT UserId FROM User WHERE UserId = ? AND IsCourier = "Y" AND IsBlackListed != "Y"',
+      [defaultCourierId]
+    );
+    if (!courier || courier.length === 0) {
+      conn.release();
+      return res.status(400).json({ error: 'Invalid or blacklisted courier' });
+    }
+    
     // Check if vendor already has this product
     const [existing] = await conn.query(
       'SELECT * FROM VendorProduct WHERE Vendor = ? AND Product = ? AND IsDeleted != "Y"',
@@ -107,17 +261,17 @@ router.post('/product/add-existing', authMiddleware, vendorOnlyMiddleware, async
     
     if (existing && existing.length > 0) {
       // Product already exists - increase stock quantity instead of creating duplicate
-      const newStockQty = existing[0].StockQty + (stockQty || 0);
+      const newStockQty = existing[0].StockQty + stockQty;
       await conn.query(
         'UPDATE VendorProduct SET StockQty = ?, LastUpdationLogin = ? WHERE VendorProductId = ?',
         [newStockQty, req.user.id, existing[0].VendorProductId]
       );
       conn.release();
       return res.json({ 
-        message: `Stock quantity increased! Previous: ${existing[0].StockQty}, Added: ${stockQty || 0}, New Total: ${newStockQty}`,
+        message: `Stock quantity increased successfully! Previous: ${existing[0].StockQty}, Added: ${stockQty}, New Total: ${newStockQty}`,
         action: 'stock_increased',
         previousStock: existing[0].StockQty,
-        addedStock: stockQty || 0,
+        addedStock: stockQty,
         newStock: newStockQty
       });
     }
@@ -126,13 +280,13 @@ router.post('/product/add-existing', authMiddleware, vendorOnlyMiddleware, async
     await conn.query(`
       INSERT INTO VendorProduct (Vendor, Product, Courier, MRP_SS, Discount, GST_SS, StockQty, IsNotAvailable, IsDeleted, RecordCreationLogin) 
       VALUES (?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?)
-    `, [req.user.id, productId, defaultCourierId || 0, sellingPrice || product[0].MRP, discount || 0, gst || 0, stockQty || 0, req.user.id]);
+    `, [req.user.id, productId, defaultCourierId, sellingPrice, discount, gst, stockQty, req.user.id]);
     
     conn.release();
     res.json({ 
       message: 'Product added to your catalog successfully',
       action: 'product_added',
-      stockQty: stockQty || 0
+      stockQty: stockQty
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -142,6 +296,14 @@ router.post('/product/add-existing', authMiddleware, vendorOnlyMiddleware, async
 // Update vendor-product details only (vendors cannot modify Product table)
 router.put('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   const { defaultCourierId, stockQty, discount, gst, sellingPrice, isNotAvailable } = req.body;
+  
+  // Validate input parameters if provided
+  if (stockQty !== undefined && stockQty < 0) return res.status(400).json({ error: 'Invalid stock quantity' });
+  if (sellingPrice !== undefined && sellingPrice <= 0) return res.status(400).json({ error: 'Invalid selling price' });
+  if (discount !== undefined && (discount < 0 || discount > 100)) return res.status(400).json({ error: 'Invalid discount percentage' });
+  if (gst !== undefined && (gst < 0 || gst > 100)) return res.status(400).json({ error: 'Invalid GST percentage' });
+  if (isNotAvailable !== undefined && isNotAvailable !== 'Y' && isNotAvailable !== 'N') return res.status(400).json({ error: 'Invalid availability status' });
+  
   try {
     const conn = await db.getConnection();
     
@@ -156,13 +318,57 @@ router.put('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res
       return res.status(403).json({ error: 'Product not found in your catalog' });
     }
     
+    // Verify courier exists and is not blacklisted if provided
+    if (defaultCourierId !== undefined && defaultCourierId > 0) {
+      const [courier] = await conn.query(
+        'SELECT UserId FROM User WHERE UserId = ? AND IsCourier = "Y" AND IsBlackListed != "Y"',
+        [defaultCourierId]
+      );
+      if (!courier || courier.length === 0) {
+        conn.release();
+        return res.status(400).json({ error: 'Invalid or blacklisted courier' });
+      }
+    }
+    
     // Update only vendor-product relationship (pricing, stock, courier, availability)
-    await conn.query(`
-      UPDATE VendorProduct SET 
-        Courier = ?, MRP_SS = ?, Discount = ?, GST_SS = ?, StockQty = ?, 
-        IsNotAvailable = ?, LastUpdationLogin = ?
-      WHERE VendorProductId = ? AND Vendor = ?
-    `, [defaultCourierId || vendorProduct[0].Courier, sellingPrice || vendorProduct[0].MRP_SS, discount || vendorProduct[0].Discount, gst || vendorProduct[0].GST_SS, stockQty || vendorProduct[0].StockQty, isNotAvailable || vendorProduct[0].IsNotAvailable, req.user.id, req.params.id, req.user.id]);
+    const updates = [];
+    const values = [];
+    
+    if (defaultCourierId !== undefined) {
+      updates.push('Courier = ?');
+      values.push(defaultCourierId);
+    }
+    if (sellingPrice !== undefined) {
+      updates.push('MRP_SS = ?');
+      values.push(sellingPrice);
+    }
+    if (discount !== undefined) {
+      updates.push('Discount = ?');
+      values.push(discount);
+    }
+    if (gst !== undefined) {
+      updates.push('GST_SS = ?');
+      values.push(gst);
+    }
+    if (stockQty !== undefined) {
+      updates.push('StockQty = ?');
+      values.push(stockQty);
+    }
+    if (isNotAvailable !== undefined) {
+      updates.push('IsNotAvailable = ?');
+      values.push(isNotAvailable);
+    }
+    
+    // Always update the last modification login
+    updates.push('LastUpdationLogin = ?');
+    values.push(req.user.id);
+    
+    if (updates.length > 1) { // More than just LastUpdationLogin
+      const query = `UPDATE VendorProduct SET ${updates.join(', ')} WHERE VendorProductId = ? AND Vendor = ?`;
+      values.push(req.params.id, req.user.id);
+      
+      await conn.query(query, values);
+    }
     
     conn.release();
     res.json({ message: 'Product updated successfully in your catalog' });
@@ -174,7 +380,8 @@ router.put('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res
 // Update stock quantity only (quick stock management)
 router.put('/product/:id/stock', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   const { stockQty } = req.body;
-  if (stockQty === undefined || stockQty < 0) return res.status(400).json({ error: 'Invalid stock quantity' });
+  if (stockQty === undefined) return res.status(400).json({ error: 'Missing stock quantity' });
+  if (stockQty < 0) return res.status(400).json({ error: 'Invalid stock quantity' });
   
   try {
     const conn = await db.getConnection();
@@ -203,13 +410,17 @@ router.put('/product/:id/stock', authMiddleware, vendorOnlyMiddleware, async (re
   }
 });
 
-// Delete product
+// Delete product from vendor's catalog (mark as deleted in VendorProduct table)
 router.delete('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   try {
     const conn = await db.getConnection();
-    await conn.query('DELETE FROM Product WHERE ProductId = ? AND ProductId IN (SELECT Product FROM VendorProductCustomerCourier WHERE Vendor = ?)', [req.params.id, req.user.id]);
+    // Update IsDeleted flag instead of actually deleting the record
+    await conn.query(
+      'UPDATE VendorProduct SET IsDeleted = "Y", LastUpdationLogin = ? WHERE VendorProductId = ? AND Vendor = ?', 
+      [req.user.id, req.params.id, req.user.id]
+    );
     conn.release();
-    res.json({ message: 'Product deleted' });
+    res.json({ message: 'Product removed from your catalog' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -261,20 +472,6 @@ router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => 
   }
 });
 
-// Get available couriers for assignment
-router.get('/couriers', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    const [couriers] = await conn.query(
-      'SELECT UserId, User, UserMobile, UserEmail FROM User WHERE IsCourier = "Y" AND IsActivated = "Y" AND IsBlackListed != "Y"'
-    );
-    conn.release();
-    res.json({ couriers });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
 // Assign courier to order (manual assignment by vendor)
 router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   const { courierId } = req.body;
@@ -314,7 +511,7 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
     
     // Verify courier exists and is active
     const [courierCheck] = await conn.query(
-      'SELECT UserId FROM User WHERE UserId = ? AND UserRole = "courier" AND IsActivated = "Y"',
+      'SELECT UserId FROM User WHERE UserId = ? AND IsCourier = "Y" AND IsActivated = "Y"',
       [courierId]
     );
     
