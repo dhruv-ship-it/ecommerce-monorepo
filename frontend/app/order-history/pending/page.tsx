@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Package, Truck, Clock } from "lucide-react"
+import { Package, Truck, CheckCircle, Clock, X } from "lucide-react"
 import Link from "next/link"
 import { validateCustomerAuth, performCustomerLogout } from "../../../utils/auth"
 
@@ -176,51 +176,206 @@ export default function PendingOrdersPage() {
                 </div>
                 {order.Vendor && order.Courier && (
                   <div className="mt-4 pt-4 border-t">
-                    <h3 className="font-medium mb-2">Tracking Details</h3>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Courier</p>
-                        <p>{order.Courier ? `Courier ID: ${order.Courier}` : 'Not assigned'}</p>
+                    <h3 className="font-medium mb-2">Order Tracking Progress</h3>
+                    <div className="space-y-3">
+                      {/* Order Placed */}
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium">Order Placed</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(order.OrderDate).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Tracking Number</p>
-                        <p>{order.TrackingNo || 'Not available'}</p>
+                      
+                      {/* Courier Assigned */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.Courier ? 'bg-green-500' : 'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.Courier ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          {order.IsPicked_by_Courier !== 'N' && (
+                            <div className={`h-full w-0.5 ${
+                              order.Courier ? 'bg-green-500' : 'bg-gray-300'
+                            } flex-grow`}></div>
+                          )}
+                        </div>
+                        <div className="ml-3 pb-3">
+                          <p className="text-sm font-medium">
+                            {order.Courier ? 'Courier Assigned' : 'Waiting for Courier Assignment'}
+                          </p>
+                          {order.Courier && (
+                            <p className="text-xs text-muted-foreground">
+                              Courier ID: {order.Courier}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Ready for Pickup</p>
-                        <p>
-                          {order.IsReady_for_Pickup_by_Courier === 'Y' 
-                            ? new Date(order.Ready_for_Pickup_by_CourierTimeStamp).toLocaleString() 
-                            : 'No'}
-                        </p>
+                      
+                      {/* Courier Accepted */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.IsPicked_by_Courier === 'Y' ? 'bg-green-500' : 
+                            order.IsPicked_by_Courier === 'P' ? 'bg-yellow-500' : 
+                            order.IsPicked_by_Courier === 'N' ? 'bg-red-500' : 
+                            'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.IsPicked_by_Courier === 'Y' ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : order.IsPicked_by_Courier === 'P' ? (
+                              <Clock className="h-4 w-4 text-white" />
+                            ) : order.IsPicked_by_Courier === 'N' ? (
+                              <X className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          {order.IsPicked_by_Courier === 'Y' && (
+                            <div className="h-full w-0.5 bg-green-500 flex-grow"></div>
+                          )}
+                        </div>
+                        <div className="ml-3 pb-3">
+                          <p className={`text-sm font-medium ${
+                            order.IsPicked_by_Courier === 'Y' ? 'text-green-700' :
+                            order.IsPicked_by_Courier === 'P' ? 'text-yellow-700' :
+                            order.IsPicked_by_Courier === 'N' ? 'text-red-700' :
+                            'text-gray-500'
+                          }`}>
+                            {order.IsPicked_by_Courier === 'Y' ? 'Courier Accepted' :
+                             order.IsPicked_by_Courier === 'P' ? 'Courier Pending Acceptance' :
+                             order.IsPicked_by_Courier === 'N' ? 'Courier Rejected' :
+                             'Waiting for Courier'}
+                          </p>
+                          {order.IsPicked_by_Courier === 'Y' && order.Picked_by_CourierTimeStamp && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.Picked_by_CourierTimeStamp).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Picked by Courier</p>
-                        <p>
-                          {order.IsPicked_by_Courier === 'Y' 
-                            ? new Date(order.Picked_by_CourierTimeStamp).toLocaleString() 
-                            : 'No'}
-                        </p>
+                      
+                      {/* Ready for Pickup */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.IsReady_for_Pickup_by_Courier === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.IsReady_for_Pickup_by_Courier === 'Y' ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          {order.IsReady_for_Pickup_by_Courier === 'Y' && (
+                            <div className="h-full w-0.5 bg-green-500 flex-grow"></div>
+                          )}
+                        </div>
+                        <div className="ml-3 pb-3">
+                          <p className="text-sm font-medium">
+                            {order.IsReady_for_Pickup_by_Courier === 'Y' ? 'Ready for Pickup' : 'Preparing Order'}
+                          </p>
+                          {order.IsReady_for_Pickup_by_Courier === 'Y' && order.Ready_for_Pickup_by_CourierTimeStamp && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.Ready_for_Pickup_by_CourierTimeStamp).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Dispatched</p>
-                        <p>
-                          {order.IsDispatched === 'Y'
-                            ? new Date(order.DispatchedTimeStamp).toLocaleString()
-                            : 'No'}
-                        </p>
+                      
+                      {/* Dispatched */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.IsDispatched === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.IsDispatched === 'Y' ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          {order.IsDispatched === 'Y' && (
+                            <div className="h-full w-0.5 bg-green-500 flex-grow"></div>
+                          )}
+                        </div>
+                        <div className="ml-3 pb-3">
+                          <p className="text-sm font-medium">
+                            {order.IsDispatched === 'Y' ? 'Order Dispatched' : 'Waiting for Dispatch'}
+                          </p>
+                          {order.IsDispatched === 'Y' && order.DispatchedTimeStamp && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.DispatchedTimeStamp).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Out for Delivery</p>
-                        <p>
-                          {order.IsOut_for_Delivery === 'Y'
-                            ? new Date(order.Out_for_DeliveryTimeStamp).toLocaleString()
-                            : 'No'}
-                        </p>
+                      
+                      {/* Out for Delivery */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.IsOut_for_Delivery === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.IsOut_for_Delivery === 'Y' ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                          {order.IsOut_for_Delivery === 'Y' && (
+                            <div className="h-full w-0.5 bg-green-500 flex-grow"></div>
+                          )}
+                        </div>
+                        <div className="ml-3 pb-3">
+                          <p className="text-sm font-medium">
+                            {order.IsOut_for_Delivery === 'Y' ? 'Out for Delivery' : 'Not Out for Delivery'}
+                          </p>
+                          {order.IsOut_for_Delivery === 'Y' && order.Out_for_DeliveryTimeStamp && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.Out_for_DeliveryTimeStamp).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Delivered */}
+                      <div className="flex">
+                        <div className="flex flex-col items-center">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full ${
+                            order.IsDelivered === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                          } flex items-center justify-center`}>
+                            {order.IsDelivered === 'Y' ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium">
+                            {order.IsDelivered === 'Y' ? 'Order Delivered' : 'Not Delivered'}
+                          </p>
+                          {order.IsDelivered === 'Y' && order.DeliveryTimeStamp && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.DeliveryTimeStamp).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
+
               </CardContent>
             </Card>
           ))}

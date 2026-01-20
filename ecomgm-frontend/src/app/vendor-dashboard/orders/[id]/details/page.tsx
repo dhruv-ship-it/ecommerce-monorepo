@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
+
 import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
@@ -22,6 +23,8 @@ interface Order {
   CustomerName: string;
   CustomerEmail: string;
   CustomerMobile: string;
+  CourierName: string;
+  CourierMobile: string;
   // Tracking fields from VendorProductCustomerCourier
   TrackingNo: string;
   IsReady_for_Pickup_by_Courier: string;
@@ -42,6 +45,16 @@ interface Order {
   Discount: number;
   GST: number;
   ProductName: string;
+  // Courier acceptance status
+  CourierAcceptanceStatus: string;
+  // Additional fields from API response
+  MRP_SS: number;
+  Discount_SS: number;
+  GST_SS: number;
+  PurchaseQty: number;
+  OrderCreationTimeStamp: string;
+  // Additional fields for simplified logic
+  ActualCourierId: number;
 }
 
 interface TrackingEvent {
@@ -53,10 +66,19 @@ interface TrackingEvent {
   timestamp: string;
 }
 
-export default function OrderDetails({ params }: { params: { id: string } }) {
+interface Courier {
+  UserId: number;
+  User: string;
+  UserMobile: string;
+  UserEmail: string;
+}
+
+export default function OrderDetails({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -66,56 +88,126 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
       return;
     }
     
-    const fetchOrderDetails = async () => {
-      try {
-        const validToken = getValidToken();
-        if (!validToken) {
-          performAutoLogout("/");
-          return;
-        }
-        
-        // Fetch order details
-        const orderResponse = await fetch(`http://localhost:4000/vendor/order/${params.id}`, {
-          headers: {
-            Authorization: `Bearer ${validToken.token}`,
-          },
-        });
-        
-        if (orderResponse.ok) {
-          const orderData = await orderResponse.json();
-          setOrder(orderData.order);
-          
-          // Fetch real tracking events from backend instead of generating mock data
-          const trackingResponse = await fetch(`http://localhost:4000/vendor/order/${params.id}/tracking`, {
-            headers: {
-              Authorization: `Bearer ${validToken.token}`,
-            },
-          });
-          
-          if (trackingResponse.ok) {
-            const trackingData = await trackingResponse.json();
-            setTrackingEvents(trackingData.trackingEvents || []);
-          } else {
-            console.error("Failed to fetch tracking events");
-            setTrackingEvents([]);
-          }
-        } else if (orderResponse.status === 401) {
-          performAutoLogout("/");
-        }
-      } catch (error) {
-        console.error("Error fetching order details:", error);
-      } finally {
-        setLoading(false);
+    fetchData();
+  }, [router, id]);
+
+  const fetchData = async () => {
+    try {
+      const validToken = getValidToken();
+      if (!validToken) {
+        performAutoLogout("/");
+        return;
       }
-    };
-    
-    fetchOrderDetails();
-  }, [router, params.id]);
+      
+      // Fetch order details
+      const orderResponse = await fetch(`http://localhost:4000/vendor/order/${id}`, {
+        headers: {
+          Authorization: `Bearer ${validToken.token}`,
+        },
+      });
+      
+      if (orderResponse.ok) {
+        const orderData = await orderResponse.json();
+        setOrder(orderData.order);
+      } else if (orderResponse.status === 401) {
+        performAutoLogout("/");
+        return;
+      }
+      
+      // Fetch real tracking events from backend
+      const trackingResponse = await fetch(`http://localhost:4000/vendor/order/${id}/tracking`, {
+        headers: {
+          Authorization: `Bearer ${validToken.token}`,
+        },
+      });
+      
+      if (trackingResponse.ok) {
+        const trackingData = await trackingResponse.json();
+        setTrackingEvents(trackingData.trackingEvents || []);
+      }
+      
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setError("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkReady = async () => {
+    try {
+      const validToken = getValidToken();
+      if (!validToken) {
+        performAutoLogout("/");
+        return;
+      }
+      
+      const response = await fetch(`http://localhost:4000/vendor/order/${id}/ready`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${validToken.token}`,
+        },
+      });
+      
+      if (response.ok) {
+        alert("Order marked as ready for pickup!");
+        fetchData(); // Refresh data
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to mark order as ready");
+      }
+    } catch (error) {
+      console.error("Error marking order as ready:", error);
+      alert("Failed to mark order as ready");
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "Delivered":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Delivered</span>;
+      case "Out for Delivery":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Out for Delivery</span>;
+      case "Dispatched":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">Dispatched</span>;
+      case "Courier Assigned":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Courier Assigned</span>;
+      case "Ready for Pickup":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ready for Pickup</span>;
+      case "No Courier Assigned":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">No Courier Assigned</span>;
+      default:
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">{status}</span>;
+    }
+  };
+
+  const getCourierAcceptanceBadge = (status: string) => {
+    switch (status) {
+      case "Courier Assigned":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Courier Assigned</span>;
+      case "Ready for Pickup":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ready for Pickup</span>;
+      case "Rejected":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Rejected</span>;
+      case "No Courier Assigned":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">No Courier</span>;
+      default:
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">{status}</span>;
+    }
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading order details...</div>
+        <div className="flex items-center">
+          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-xl">Loading order details...</span>
+        </div>
       </div>
     );
   }
@@ -155,8 +247,66 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6">
-                Order Details #{params.id}
+                Order Details #{id}
               </h3>
+              
+              {error && (
+                <div className="mb-4 p-4 bg-red-50 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
+              
+              {/* Order Status Section */}
+              <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200">
+                <h4 className="text-md font-medium text-gray-900 mb-3">Order Status</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Order Status:</span> 
+                      {getStatusBadge(order.OrderStatus)}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-2">
+                      <span className="font-medium">Courier Acceptance Status:</span> 
+                      {getCourierAcceptanceBadge(order.CourierAcceptanceStatus)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Assigned Courier:</span> 
+                      {order.CourierId ? (
+                        <span className="ml-2">{order.CourierName || `Courier ${order.CourierId}`} ({order.CourierMobile})</span>
+                      ) : (
+                        <span className="ml-2 text-red-600">Not Assigned</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Mark Ready for Pickup */}
+                {order.IsReady_for_Pickup_by_Courier !== 'Y' && order.CourierId > 0 && order.OrderStatus !== "Delivered" && order.OrderStatus !== "Out for Delivery" && order.OrderStatus !== "Dispatched" && (
+                  <div className="mt-4 p-4 bg-white rounded border border-gray-200">
+                    <h5 className="text-sm font-medium text-gray-900 mb-3">Order Ready for Pickup</h5>
+                    <button
+                      onClick={handleMarkReady}
+                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                    >
+                      Mark Ready for Pickup
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Note: This will notify the courier that the order is ready for pickup and generate a tracking number.
+                    </p>
+                  </div>
+                )}
+                
+                {/* Ready for Pickup Status */}
+                {order.IsReady_for_Pickup_by_Courier === 'Y' && (
+                  <div className="mt-4 p-4 bg-green-50 rounded border border-green-200">
+                    <p className="text-sm text-green-800 font-medium">
+                      ✓ Order marked as ready for pickup on {new Date(order.Ready_for_Pickup_by_CourierTimeStamp).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
               
               {/* Product Details Section */}
               <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -193,32 +343,11 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
                   <div className="space-y-2">
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Order Date:</span> 
-                      {new Date(order.OrderDate).toLocaleDateString()}
+                      {new Date(order.OrderCreationTimeStamp || order.OrderDate).toLocaleDateString()}
                     </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Order Status:</span> 
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                          ${order.IsDelivered === 'Y' 
-                            ? 'bg-green-100 text-green-800' 
-                            : order.IsOut_for_Delivery === 'Y' 
-                              ? 'bg-blue-100 text-blue-800'
-                              : order.IsDispatched === 'Y'
-                                ? 'bg-purple-100 text-purple-800'
-                                : order.IsPicked_by_Courier === 'Y'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-gray-100 text-gray-800'}`}
-                      >
-                        {order.IsDelivered === 'Y' 
-                          ? 'Delivered' 
-                          : order.IsOut_for_Delivery === 'Y' 
-                            ? 'Out for Delivery'
-                            : order.IsDispatched === 'Y'
-                              ? 'Shipped'
-                              : order.IsPicked_by_Courier === 'Y'
-                                ? 'Courier Accepted'
-                                : 'Processing'}
-                      </span>
+                      {getStatusBadge(order.OrderStatus)}
                     </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Payment Status:</span> 
@@ -283,22 +412,26 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
                     <tbody className="bg-white divide-y divide-gray-200">
                       <tr>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                          {order.ProductName}
+                          {order.Product}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {order.Quantity}
+                          {order.PurchaseQty}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          ₹{order.MRP}
+                          ₹{order.MRP_SS ?? order.MRP}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          ₹{order.Discount}
+                          ₹{order.Discount_SS ?? order.Discount}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {order.GST}%
+                          {order.GST_SS ?? order.GST}%
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          ₹{(order.Quantity * (order.MRP - order.Discount) * (1 + order.GST/100)).toFixed(2)}
+                          ₹{(
+                            order.PurchaseQty *
+                            ((order.MRP_SS ?? order.MRP) - (order.Discount_SS ?? order.Discount)) *
+                            (1 + (order.GST_SS ?? order.GST) / 100)
+                          ).toFixed(2)}
                         </td>
                       </tr>
                     </tbody>
@@ -313,19 +446,19 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
                     <div className="flex justify-between mb-2">
                       <span className="text-sm text-gray-600">Subtotal:</span>
                       <span className="text-sm text-gray-900">
-                        ₹{(order.Quantity * (order.MRP - order.Discount)).toFixed(2)}
+                        ₹{(order.PurchaseQty * ((order.MRP_SS ?? order.MRP) - (order.Discount_SS ?? order.Discount))).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between mb-2">
-                      <span className="text-sm text-gray-600">GST ({order.GST}%):</span>
+                      <span className="text-sm text-gray-600">GST ({order.GST_SS ?? order.GST}%):</span>
                       <span className="text-sm text-gray-900">
-                        ₹{(order.Quantity * (order.MRP - order.Discount) * (order.GST/100)).toFixed(2)}
+                        ₹{(order.PurchaseQty * ((order.MRP_SS ?? order.MRP) - (order.Discount_SS ?? order.Discount)) * ((order.GST_SS ?? order.GST) / 100)).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between mt-4 pt-4 border-t border-gray-200">
                       <span className="text-base font-medium text-gray-900">Total:</span>
                       <span className="text-base font-medium text-gray-900">
-                        ₹{(order.Quantity * (order.MRP - order.Discount) * (1 + order.GST/100)).toFixed(2)}
+                        ₹{Number(order.TotalAmount).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -336,14 +469,6 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
               <div className="mt-8">
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="text-md font-medium text-gray-900">Tracking Updates</h4>
-                  {order?.OrderStatus !== 'Delivered' && (
-                    <button
-                      onClick={() => router.push(`/vendor-dashboard/orders/${params.id}/update`)}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                    >
-                      Update Tracking
-                    </button>
-                  )}
                 </div>
                 
                 {/* Tracking Timeline */}
@@ -378,18 +503,12 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
               </div>
               
               {/* Action Buttons */}
-              <div className="flex space-x-4">
+              <div className="flex flex-wrap gap-4">
                 <button
                   onClick={() => window.print()}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 >
                   Print Order
-                </button>
-                <button
-                  onClick={() => router.push(`/vendor-dashboard/orders/${order?.PuchaseId}/update`)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Update Order Status
                 </button>
               </div>
             </div>
@@ -399,5 +518,3 @@ export default function OrderDetails({ params }: { params: { id: string } }) {
     </div>
   );
 }
-
-

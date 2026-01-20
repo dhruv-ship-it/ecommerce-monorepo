@@ -21,212 +21,312 @@ function courierOnlyMiddleware(req, res, next) {
   return res.status(403).json({ error: 'Forbidden' });
 }
 
+// Get order details (MOVED UP to avoid conflict with /orders route)
+router.get('/order/:id', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  let conn;
+  try {
+    conn = await db.getConnection();
+    
+    console.log('=== COURIER ORDER DETAILS DEBUG ===');
+    console.log(`Requesting order details for ID: ${req.params.id}, Logged-in Courier: ${req.user.id}`);
+    
+    // First check active orders table
+    const orderResult = await conn.query(
+      'SELECT vpc.PurchaseId as PuchaseId, ' +
+      'vpc.Vendor, vpc.Product as ProductId, vpc.Customer as CustomerId, ' +
+      'vpc.Courier, vpc.TrackingNo, ' +
+      'vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp, ' +
+      'vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, ' +
+      'vpc.IsDispatched, vpc.DispatchedTimeStamp, ' +
+      'vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp, ' +
+      'vpc.IsDelivered, vpc.DeliveryTimeStamp, ' +
+      'vpc.IsReturned, vpc.ReturnTimeStamp, ' +
+      'vpc.MRP_SS, vpc.Discount_SS, vpc.GST_SS, vpc.PurchaseQty, ' +
+      'vpc.OrderCreationTimeStamp as OrderDate, ' +
+      'p.Product, ' +
+      'p.MRP as ProductPrice, ' +
+      'c.Customer as CustomerName, ' +
+      'c.CustomerEmail, ' +
+      'c.CustomerMobile, ' +
+      'pur.TotalAmount, ' +
+      'v.User as VendorName, ' +
+      'v.UserMobile as VendorMobile, ' +
+      'v.UserEmail as VendorEmail ' +
+      'FROM VendorProductCustomerCourier vpc ' +
+      'JOIN Product p ON vpc.Product = p.ProductId ' +
+      'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
+      'LEFT JOIN Purchase pur ON vpc.PurchaseId = pur.PuchaseId ' +
+      'LEFT JOIN User v ON vpc.Vendor = v.UserId AND v.IsVendor = "Y" ' +
+      'WHERE vpc.PurchaseId = ? AND vpc.Courier = ?',
+      [req.params.id, req.user.id]
+    );
+    
+    // Handle MariaDB result format (can be array of arrays or array of objects)
+    let orderArray = [];
+    if (Array.isArray(orderResult)) {
+      if (orderResult.length > 0 && Array.isArray(orderResult[0])) {
+        // MariaDB returns [data, metadata] format
+        orderArray = orderResult[0];
+      } else {
+        // Direct array of objects
+        orderArray = orderResult;
+      }
+    } else if (orderResult && typeof orderResult === 'object') {
+      // Single object result
+      orderArray = [orderResult];
+    }
+    
+    if (!orderArray || orderArray.length === 0) {
+      // Check archived orders if not found in active table
+      const archivedOrderResult = await conn.query(
+        'SELECT vpc_arch.*, ' +
+        'vpc_arch.OrderCreationTimeStamp as OrderDate, ' +
+        'p.Product, ' +
+        'p.MRP as ProductPrice, ' +
+        'c.Customer as CustomerName, ' +
+        'c.CustomerEmail, ' +
+        'c.CustomerMobile, ' +
+        'pur_arch.TotalAmount, ' +
+        'v.User as VendorName, ' +
+        'v.UserMobile as VendorMobile, ' +
+        'v.UserEmail as VendorEmail ' +
+        'FROM vendorproductcustomercourier_arch vpc_arch ' +
+        'JOIN Product p ON vpc_arch.Product = p.ProductId ' +
+        'JOIN Customer c ON vpc_arch.Customer = c.CustomerId ' +
+        'LEFT JOIN purchase_arch pur_arch ON vpc_arch.PurchaseId = pur_arch.PuchaseId ' +
+        'LEFT JOIN User v ON vpc_arch.Vendor = v.UserId AND v.IsVendor = "Y" ' +
+        'WHERE vpc_arch.PurchaseId = ? AND vpc_arch.Courier = ?',
+        [req.params.id, req.user.id]
+      );
+      
+      // Handle MariaDB result format for archived orders
+      let archivedOrderArray = [];
+      if (Array.isArray(archivedOrderResult)) {
+        if (archivedOrderResult.length > 0 && Array.isArray(archivedOrderResult[0])) {
+          archivedOrderArray = archivedOrderResult[0];
+        } else {
+          archivedOrderArray = archivedOrderResult;
+        }
+      } else if (archivedOrderResult && typeof archivedOrderResult === 'object') {
+        archivedOrderArray = [archivedOrderResult];
+      }
+      
+      if (!archivedOrderArray || archivedOrderArray.length === 0) {
+        return res.status(404).json({ error: 'Order not found or access denied' });
+      }
+      
+      // Convert BigInt values to numbers for archived order
+      const processedOrder = {};
+      for (const [key, value] of Object.entries(archivedOrderArray[0])) {
+        processedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+      }
+      
+      console.log(`Found archived order:`, processedOrder);
+      return res.json({ order: processedOrder, source: 'archived' });
+    }
+    
+    // Convert BigInt values to numbers to prevent serialization errors
+    const processedOrder = {};
+    for (const [key, value] of Object.entries(orderArray[0])) {
+      processedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+    }
+    
+    console.log(`Found active order:`, processedOrder);
+    res.json({ order: processedOrder, source: 'active' });
+  } catch (err) {
+    console.error('Error fetching order details:', err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 // Get courier's assigned orders - Frontend compatible format
 router.get('/orders', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  let conn;
   try {
-    const conn = await db.getConnection();
-    const [orders] = await conn.query(`
+    conn = await db.getConnection();
+    const ordersResult = await conn.query(`
       SELECT 
-        vpc.PurchaseId as PuchaseId,
+        vpc.PurchaseId,
         vpc.Product as ProductId,
         p.Product,
         p.MRP as ProductPrice,
         vpc.Customer as CustomerId,
         vpc.OrderCreationTimeStamp as OrderDate,
-        vpc.MRP_SS as TotalAmount,
-        'COD' as PaymentMode,
-        'Pending' as PaymentStatus,
+        pur.TotalAmount,
+        pur.PaymentMode,
+        pur.PaymentStatus,
         vpc.Courier as CourierId,
         vpc.Vendor as VendorId,
         c.Customer as CustomerName,
         c.CustomerEmail,
         c.CustomerMobile,
+        c.Address as CustomerAddress,
         v.User as VendorName,
         v.UserMobile as VendorMobile,
+        v.UserEmail as VendorEmail,
         CASE 
           WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
           WHEN vpc.IsPartialDelivery = 'Y' THEN 'Partial Delivery'
           WHEN vpc.IsReturned = 'Y' THEN 'Returned'
           WHEN vpc.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
           WHEN vpc.IsDispatched = 'Y' THEN 'Dispatched'
-          WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' AND vpc.IsPicked_by_Courier = 'Y' THEN 'Ready for Pickup'
-          WHEN vpc.IsPicked_by_Courier = 'Y' THEN 'Accepted'
-          ELSE 'Pending'
+          WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          ELSE 'Order Placed'
         END as OrderStatus,
-        CASE 
-          WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' AND vpc.IsPicked_by_Courier = 'Y' AND vpc.IsDispatched != 'Y' THEN 'Y'
-          ELSE 'N'
-        END as CanUpdateStatus
+        vpc.IsReady_for_Pickup_by_Courier,
+        vpc.Ready_for_Pickup_by_CourierTimeStamp,
+        vpc.IsPicked_by_Courier,
+        vpc.Picked_by_CourierTimeStamp,
+        vpc.IsDispatched,
+        vpc.DispatchedTimeStamp,
+        vpc.IsOut_for_Delivery,
+        vpc.Out_for_DeliveryTimeStamp,
+        vpc.IsDelivered,
+        vpc.DeliveryTimeStamp,
+        vpc.IsReturned,
+        vpc.ReturnTimeStamp,
+        vpc.TrackingNo,
+        'Active' as OrderSource
       FROM VendorProductCustomerCourier vpc
       JOIN Product p ON vpc.Product = p.ProductId
       JOIN Customer c ON vpc.Customer = c.CustomerId
-      JOIN User v ON vpc.Vendor = v.UserId
+      LEFT JOIN Purchase pur ON vpc.PurchaseId = pur.PuchaseId
+      LEFT JOIN User v ON vpc.Vendor = v.UserId AND v.IsVendor = 'Y'
       WHERE vpc.Courier = ? AND vpc.IsDeleted != 'Y'
-      ORDER BY 
-        CASE WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' AND vpc.IsPicked_by_Courier = 'Y' AND vpc.IsDispatched != 'Y' THEN 0 ELSE 1 END,
-        vpc.OrderCreationTimeStamp DESC
-    `, [req.user.id]);
-    conn.release();
-    res.json({ orders });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get order details
-router.get('/order/:id', authMiddleware, courierOnlyMiddleware, async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    const [order] = await conn.query(
-      'SELECT p.*, vpc.Vendor, vpc.Courier, ' +
-      'p.OrderStatus, p.TotalAmount, p.OrderDate, ' +
-      'pr.Product, pr.MRP as ProductPrice, ' +
-      'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
-      'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
-      'JOIN Product pr ON vpc.Product = pr.ProductId ' +
-      'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
-      'WHERE p.PuchaseId = ? AND vpc.Courier = ?',
-      [req.params.id, req.user.id]
-    );
-    conn.release();
+      UNION ALL
+      SELECT 
+        vpc_arch.PurchaseId,
+        vpc_arch.Product as ProductId,
+        p.Product,
+        p.MRP as ProductPrice,
+        vpc_arch.Customer as CustomerId,
+        vpc_arch.OrderCreationTimeStamp as OrderDate,
+        pur_arch.TotalAmount,
+        pur_arch.PaymentMode,
+        pur_arch.PaymentStatus,
+        vpc_arch.Courier as CourierId,
+        vpc_arch.Vendor as VendorId,
+        c.Customer as CustomerName,
+        c.CustomerEmail,
+        c.CustomerMobile,
+        c.Address as CustomerAddress,
+        v.User as VendorName,
+        v.UserMobile as VendorMobile,
+        v.UserEmail as VendorEmail,
+        CASE 
+          WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
+          WHEN vpc_arch.IsPartialDelivery = 'Y' THEN 'Partial Delivery'
+          WHEN vpc_arch.IsReturned = 'Y' THEN 'Returned'
+          WHEN vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
+          WHEN vpc_arch.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          ELSE 'Order Placed'
+        END as OrderStatus,
+        vpc_arch.IsReady_for_Pickup_by_Courier,
+        vpc_arch.Ready_for_Pickup_by_CourierTimeStamp,
+        vpc_arch.IsPicked_by_Courier,
+        vpc_arch.Picked_by_CourierTimeStamp,
+        vpc_arch.IsDispatched,
+        vpc_arch.DispatchedTimeStamp,
+        vpc_arch.IsOut_for_Delivery,
+        vpc_arch.Out_for_DeliveryTimeStamp,
+        vpc_arch.IsDelivered,
+        vpc_arch.DeliveryTimeStamp,
+        vpc_arch.IsReturned,
+        vpc_arch.ReturnTimeStamp,
+        vpc_arch.TrackingNo,
+        'Archived' as OrderSource
+      FROM vendorproductcustomercourier_arch vpc_arch
+      JOIN Product p ON vpc_arch.Product = p.ProductId
+      JOIN Customer c ON vpc_arch.Customer = c.CustomerId
+      LEFT JOIN purchase_arch pur_arch ON vpc_arch.PurchaseId = pur_arch.PuchaseId
+      LEFT JOIN User v ON vpc_arch.Vendor = v.UserId AND v.IsVendor = 'Y'
+      WHERE vpc_arch.Courier = ?
+      ORDER BY OrderDate DESC
+    `, [req.user.id, req.user.id]);
     
-    if (!order || order.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+    // Handle MariaDB result format (can be array of arrays or array of objects)
+    let orders = [];
+    if (Array.isArray(ordersResult)) {
+      if (ordersResult.length > 0 && Array.isArray(ordersResult[0])) {
+        // MariaDB returns [data, metadata] format
+        orders = ordersResult[0];
+      } else {
+        // Direct array of objects
+        orders = ordersResult;
+      }
+    } else if (ordersResult && typeof ordersResult === 'object') {
+      // Single object result
+      orders = [ordersResult];
     }
     
-    res.json({ order: order[0] });
+    // Convert BigInt values to numbers to prevent serialization errors
+    const processedOrders = orders.map(order => {
+      const processedOrder = {};
+      for (const [key, value] of Object.entries(order)) {
+        processedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+      }
+      return processedOrder;
+    });
+    
+    console.log(`=== COURIER ORDERS LIST DEBUG ===`);
+    console.log(`Returning ${processedOrders.length} orders for courier ${req.user.id}`);
+    console.log('Sample order:', processedOrders.length > 0 ? processedOrders[0] : 'No orders');
+    
+    res.json({ orders: processedOrders });
   } catch (err) {
+    console.error('Error fetching orders:', err);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-// Accept or reject order - THIS IS THE ONLY WAY COURIER ACCEPTS
-router.put('/order/:id/accept', authMiddleware, courierOnlyMiddleware, async (req, res) => {
-  const { accept } = req.body;
-  if (accept === undefined) return res.status(400).json({ error: 'Missing accept parameter' });
+// Update order status - Couriers can update delivery status after order is ready for pickup
+router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'Missing status' });
   
+  let conn;
   try {
-    const conn = await db.getConnection();
+    conn = await db.getConnection();
     
-    // Check if this courier is assigned to the order
-    const [assignment] = await conn.query(
+    // Check if order is assigned to this courier and ready for pickup
+    const orderCheckResult = await conn.query(
       'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Courier = ?',
       [req.params.id, req.user.id]
     );
     
-    if (!assignment || assignment.length === 0) {
-      conn.release();
-      return res.status(403).json({ error: 'Not assigned to this courier' });
-    }
-    
-    // Check if already accepted/rejected
-    if (assignment[0].IsPicked_by_Courier === 'Y') {
-      conn.release();
-      return res.status(400).json({ error: 'Order already accepted - cannot change decision' });
-    }
-    
-    if (accept) {
-      // ACCEPT: Mark as picked by courier (this enables all future status updates)
-      // DO NOT mark as dispatched yet - that happens after vendor marks ready for pickup
-      await conn.query(
-        'UPDATE VendorProductCustomerCourier SET IsPicked_by_Courier = "Y", Picked_by_CourierTimeStamp = NOW() WHERE PurchaseId = ?',
-        [req.params.id]
-      );
-      
-      res.json({ message: 'Order accepted successfully. Waiting for vendor to mark ready for pickup.' });
-    } else {
-      // REJECT: Find another courier
-      const [couriers] = await conn.query(
-        'SELECT UserId FROM User WHERE IsCourier = "Y" AND IsActivated = "Y" AND UserId != ? LIMIT 1',
-        [req.user.id]
-      );
-      
-      if (couriers && couriers.length > 0) {
-        const newCourierId = couriers[0].UserId;
-        
-        // Assign to new courier and reset acceptance status
-        await conn.query(
-          'UPDATE VendorProductCustomerCourier SET Courier = ?, IsPicked_by_Courier = "N", Picked_by_CourierTimeStamp = "0000-00-00 00:00:00" WHERE PurchaseId = ?',
-          [newCourierId, req.params.id]
-        );
-        
-        res.json({ message: 'Order rejected and reassigned to another courier' });
+    // Handle query result
+    let orderCheck = [];
+    if (Array.isArray(orderCheckResult)) {
+      if (Array.isArray(orderCheckResult[0])) {
+        orderCheck = orderCheckResult[0];
       } else {
-        // No other couriers available - requires manual vendor assignment
-        await conn.query(
-          'UPDATE VendorProductCustomerCourier SET Courier = 0, IsPicked_by_Courier = "N", Picked_by_CourierTimeStamp = "0000-00-00 00:00:00" WHERE PurchaseId = ?',
-          [req.params.id]
-        );
-        
-        res.json({ message: 'Order rejected - no other couriers available, requires manual assignment by vendor' });
+        orderCheck = orderCheckResult;
       }
+    } else if (orderCheckResult) {
+      orderCheck = [orderCheckResult];
     }
     
-    conn.release();
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Handle courier timeout for order acceptance - Fixed endpoint
-router.post('/order/:id/timeout', authMiddleware, courierOnlyMiddleware, async (req, res) => {
-  try {
-    const conn = await db.getConnection();
-    
-    // First verify this courier was assigned to this order
-    const [order] = await conn.query(
-      'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Courier = ? AND IsPicked_by_Courier != "Y"',
-      [req.params.id, req.user.id]
-    );
-    
-    if (!order) {
-      conn.release();
-      return res.status(404).json({ error: 'Order not found or already accepted' });
+    if (!orderCheck || orderCheck.length === 0) {
+      return res.status(403).json({ error: 'Order not found or not assigned to you' });
     }
     
-    // Find next available courier for this vendor
-    const [availableCouriers] = await conn.query(
-      'SELECT UserId FROM User WHERE UserRole = "courier" AND UserId != ? ORDER BY RAND() LIMIT 1',
-      [req.user.id]
-    );
+    const order = orderCheck[0];
     
-    if (availableCouriers.length > 0) {
-      // Assign to next courier
-      await conn.query(
-        'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE PurchaseId = ?',
-        [availableCouriers[0].UserId, req.params.id]
-      );
-      
-      // Set timeout for new courier (30 minutes)
-      setTimeout(async () => {
-        // This is a simplified timeout - in production, use a proper job queue
-        console.log(`Order ${req.params.id} timeout for courier ${availableCouriers[0].UserId}`);
-      }, 30 * 60 * 1000);
-      
-      conn.release();
-      res.json({ message: 'Order reassigned to next courier', newCourierId: availableCouriers[0].UserId });
-    } else {
-      // No more couriers available - mark as unassigned
-      await conn.query(
-        'UPDATE VendorProductCustomerCourier SET Courier = 0 WHERE PurchaseId = ?',
-        [req.params.id]
-      );
-      conn.release();
-      res.json({ message: 'No couriers available - order marked as unassigned' });
+    // Check if order is ready for pickup (required before any status updates)
+    if (order.IsReady_for_Pickup_by_Courier !== 'Y') {
+      return res.status(400).json({ error: 'Order is not ready for pickup yet' });
     }
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Update order status - Only after acceptance and vendor marks ready for pickup
-router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (req, res) => {
-  const { status, trackingEvent } = req.body;
-  if (!status) return res.status(400).json({ error: 'Missing status' });
-  
-  try {
-    const conn = await db.getConnection();
+    
+    // Generate tracking number when dispatching (first status update)
+    let trackingNumber = order.TrackingNo;
+    if (!trackingNumber && (status === 'Shipped' || status === 'Dispatched')) {
+      trackingNumber = `TRK${Date.now()}${req.params.id}`;
+    }
     
     // Update Purchase table status
     await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', [status, req.params.id]);
@@ -235,12 +335,15 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
     const updateFields = [];
     const updateValues = [];
     
-    if (req.body.trackingNumber) {
+    if (trackingNumber) {
       updateFields.push('TrackingNo = ?');
-      updateValues.push(req.body.trackingNumber);
+      updateValues.push(trackingNumber);
     }
     
-    if (status === 'Out for Delivery') {
+    // Couriers can update delivery status fields
+    if (status === 'Shipped' || status === 'Dispatched') {
+      updateFields.push('IsDispatched = "Y", DispatchedTimeStamp = NOW()');
+    } else if (status === 'Out for Delivery') {
       updateFields.push('IsOut_for_Delivery = "Y", Out_for_DeliveryTimeStamp = NOW()');
     } else if (status === 'Delivered') {
       updateFields.push('IsDelivered = "Y", DeliveryTimeStamp = NOW()');
@@ -256,33 +359,62 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
     }
     
     // Get updated order details with product info
-    const [updatedOrder] = await conn.query(
-      'SELECT p.*, vpc.Vendor, vpc.Courier, ' +
-      'p.OrderStatus, p.TotalAmount, p.OrderDate, ' +
+    const orderResult = await conn.query(
+      'SELECT vpc.*, ' +
+      'vpc.OrderCreationTimeStamp as OrderDate, ' +
+      'vpc.Courier as CourierId, ' +
+      'COALESCE(p.TotalAmount, vpc.MRP_SS) as TotalAmount, ' +
+      'COALESCE(p.PaymentMode, \'COD\') as PaymentMode, ' +
+      'COALESCE(p.PaymentStatus, \'Pending\') as PaymentStatus, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
-      'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
-      'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
+      'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
+      'u.User as VendorName, u.UserMobile as VendorMobile, u.UserEmail as VendorEmail ' +
+      'FROM VendorProductCustomerCourier vpc ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
-      'WHERE p.PuchaseId = ? AND vpc.Courier = ?',
+      'JOIN User u ON vpc.Vendor = u.UserId ' +
+      'LEFT JOIN Purchase p ON vpc.PurchaseId = p.PuchaseId ' +
+      'WHERE vpc.PurchaseId = ? AND vpc.Courier = ?',
       [req.params.id, req.user.id]
     );
     
-    conn.release();
+    // Handle MariaDB result format (can be array of arrays or array of objects)
+    let updatedOrder = [];
+    if (Array.isArray(orderResult)) {
+      if (orderResult.length > 0 && Array.isArray(orderResult[0])) {
+        // MariaDB returns [data, metadata] format
+        updatedOrder = orderResult[0];
+      } else {
+        // Direct array of objects
+        updatedOrder = orderResult;
+      }
+    } else if (orderResult && typeof orderResult === 'object') {
+      // Single object result
+      updatedOrder = [orderResult];
+    }
+    
+    // Convert BigInt values to strings to prevent serialization errors
+    const processedUpdatedOrder = {};
+    for (const [key, value] of Object.entries(updatedOrder[0])) {
+      processedUpdatedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+    }
+    
     res.json({ 
       message: 'Order status updated',
-      order: updatedOrder[0]
+      order: processedUpdatedOrder
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
 // Get tracking events for order with product details
 router.get('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  let conn;
   try {
-    const conn = await db.getConnection();
+    conn = await db.getConnection();
     
     // Get order details with product info and tracking information
     const [order] = await conn.query(
@@ -293,26 +425,47 @@ router.get('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async (
       'vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp, ' +
       'vpc.IsDelivered, vpc.DeliveryTimeStamp, ' +
       'vpc.IsReturned, vpc.ReturnTimeStamp, ' +
-      'p.OrderStatus, p.TotalAmount, p.OrderDate, ' +
+      'COALESCE(p.OrderStatus, \'Order Placed\') as OrderStatus, ' +
+      'COALESCE(p.TotalAmount, vpc.MRP_SS) as TotalAmount, ' +
+      'COALESCE(p.OrderDate, vpc.OrderCreationTimeStamp) as OrderDate, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
-      'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
+      'FROM VendorProductCustomerCourier vpc ' +
+      'LEFT JOIN Purchase p ON vpc.PurchaseId = p.PuchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
-      'WHERE p.PuchaseId = ? AND vpc.Courier = ?',
+      'WHERE vpc.PurchaseId = ? AND vpc.Courier = ?',
       [req.params.id, req.user.id]
     );
     
-    conn.release();
+    // Handle MariaDB result format (can be array of arrays or array of objects)
+    let orderArray = [];
+    if (Array.isArray(order)) {
+      if (order.length > 0 && Array.isArray(order[0])) {
+        // MariaDB returns [data, metadata] format
+        orderArray = order[0];
+      } else {
+        // Direct array of objects
+        orderArray = order;
+      }
+    } else if (order && typeof order === 'object') {
+      // Single object result
+      orderArray = [order];
+    }
     
-    if (!order || order.length === 0) {
+    if (!orderArray || orderArray.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Convert BigInt values to numbers to prevent serialization errors
+    const processedOrderData = {};
+    for (const [key, value] of Object.entries(orderArray[0])) {
+      processedOrderData[key] = typeof value === 'bigint' ? Number(value) : value;
     }
     
     // Generate tracking events based on the order status fields
     const trackingEvents = [];
-    const orderData = order[0];
+    const orderData = processedOrderData;
     
     // Add order placed event
     trackingEvents.push({
@@ -395,19 +548,22 @@ router.get('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async (
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-// Add tracking event (dummy endpoint since tracking is in VendorProductCustomerCourier)
+// Add tracking event (FULLY FUNCTIONAL - Couriers can update all delivery status fields)
 router.post('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async (req, res) => {
-  // Since tracking is stored in VendorProductCustomerCourier, we'll update the appropriate status field
+  // Couriers can update all delivery status fields
   const { status, location, description } = req.body;
   if (!status || !location || !description) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
+  let conn;
   try {
-    const conn = await db.getConnection();
+    conn = await db.getConnection();
     
     // Update the order status based on the tracking event
     let updateFields = '';
@@ -428,11 +584,54 @@ router.post('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async 
       );
     }
     
-    conn.release();
-    res.json({ message: 'Tracking event added' });
+    res.json({ message: 'Tracking event added successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-export default router; 
+// Get vendors that have selected this courier as default
+router.get('/vendors', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  let conn;
+  try {
+    conn = await db.getConnection();
+    
+    const vendorsResult = await conn.query(`
+      SELECT 
+        vp.Vendor as VendorId,
+        u.User as VendorName,
+        u.UserMobile as VendorMobile,
+        u.UserEmail as VendorEmail,
+        vp.Courier as DefaultCourier,
+        cu.User as CourierName,
+        cu.UserMobile as CourierMobile,
+        cu.UserEmail as CourierEmail
+      FROM VendorProduct vp
+      JOIN User u ON vp.Vendor = u.UserId
+      JOIN User cu ON vp.Courier = cu.UserId
+      WHERE vp.Courier = ?
+      GROUP BY vp.Vendor
+    `, [req.user.id]);
+    
+    // Handle query result
+    let vendors = [];
+    if (Array.isArray(vendorsResult)) {
+      if (Array.isArray(vendorsResult[0])) {
+        vendors = vendorsResult[0];
+      } else {
+        vendors = vendorsResult;
+      }
+    }
+    
+    res.json({ vendors });
+  } catch (err) {
+    console.error('Error fetching vendors:', err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+export default router;

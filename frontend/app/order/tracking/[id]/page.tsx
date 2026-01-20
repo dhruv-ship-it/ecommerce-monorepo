@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Package, Truck, CheckCircle, Clock, MapPin, User, Phone } from "lucide-react"
+import { Package, Truck, CheckCircle, Clock, MapPin, User, Phone, X } from "lucide-react"
 import Link from "next/link"
 import { validateCustomerAuth, performCustomerLogout } from "../../../../utils/auth"
 import { useRouter } from "next/navigation"
@@ -23,11 +23,16 @@ interface OrderTracking {
   PurchaseQty: number;
   OrderCreationTimeStamp: string;
   IsReady_for_Pickup_by_Courier: string;
+  Ready_for_Pickup_by_CourierTimeStamp: string;
   TrackingNo: string;
   IsPicked_by_Courier: string;
+  Picked_by_CourierTimeStamp: string;
   IsDispatched: string;
+  DispatchedTimeStamp: string;
   IsOut_for_Delivery: string;
+  Out_for_DeliveryTimeStamp: string;
   IsDelivered: string;
+  DeliveryTimeStamp: string;
   IsPartialDelivery: string;
   IsReturned: string;
   IsDeleted: string;
@@ -45,6 +50,7 @@ interface OrderTracking {
   CustomerEmail: string;
   VendorMobile: string;
   CourierMobile: string;
+  ReturnTimeStamp: string;
 }
 
 interface TrackingEvent {
@@ -179,27 +185,191 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
               <div className="mt-6">
                 <h3 className="font-medium mb-4">Tracking Progress</h3>
                 
-                <div className="relative pl-8 border-l-2 border-gray-200 space-y-8">
-                  {trackingEvents.map((event, index) => (
-                    <div key={event.TrackingEventId} className="relative">
-                      <div className={`absolute -left-11 w-8 h-8 rounded-full flex items-center justify-center ${
-                        index === trackingEvents.length - 1 ? 'bg-blue-500' : 'bg-green-500'
-                      }`}>
-                        {index === trackingEvents.length - 1 ? (
-                          <div className="w-3 h-3 bg-white rounded-full"></div>
-                        ) : (
+                <div className="space-y-4">
+                  {/* Order Placed */}
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="font-medium">Order Placed</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(trackingInfo.OrderDate).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Courier Assignment Status */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.Courier ? 'bg-green-500' : 'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.Courier ? (
                           <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
                         )}
                       </div>
-                      <div>
-                        <h4 className="font-medium">{event.status}</h4>
-                        <p className="text-sm text-muted-foreground">{event.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(event.timestamp).toLocaleString()} at {event.location}
+                      {trackingInfo.IsPicked_by_Courier !== 'N' && (
+                        <div className={`h-full w-0.5 ${
+                          trackingInfo.Courier ? 'bg-green-500' : 'bg-gray-300'
+                        } flex-grow my-1`}></div>
+                      )}
+                    </div>
+                    <div className="ml-4 pb-3">
+                      <p className="font-medium">
+                        {trackingInfo.Courier ? 'Courier Assigned' : 'Waiting for Courier Assignment'}
+                      </p>
+                      {trackingInfo.Courier && (
+                        <p className="text-sm text-muted-foreground">
+                          {trackingInfo.CourierName || `Courier ID: ${trackingInfo.Courier}`}
                         </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Ready for Pickup */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.IsReady_for_Pickup_by_Courier === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.IsReady_for_Pickup_by_Courier === 'Y' ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        )}
+                      </div>
+                      {trackingInfo.IsReady_for_Pickup_by_Courier === 'Y' && (
+                        <div className="h-full w-0.5 bg-green-500 flex-grow my-1"></div>
+                      )}
+                    </div>
+                    <div className="ml-4 pb-3">
+                      <p className="font-medium">
+                        {trackingInfo.IsReady_for_Pickup_by_Courier === 'Y' ? 'Ready for Pickup' : 'Preparing Order'}
+                      </p>
+                      {trackingInfo.IsReady_for_Pickup_by_Courier === 'Y' && trackingInfo.Ready_for_Pickup_by_CourierTimeStamp && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(trackingInfo.Ready_for_Pickup_by_CourierTimeStamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Courier Picked Up Status */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.IsPicked_by_Courier === 'Y' ? 'bg-green-500' : 
+                        'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.IsPicked_by_Courier === 'Y' ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        )}
+                      </div>
+                      {trackingInfo.IsPicked_by_Courier === 'Y' && (
+                        <div className="h-full w-0.5 bg-green-500 flex-grow my-1"></div>
+                      )}
+                    </div>
+                    <div className="ml-4 pb-3">
+                      <p className={`font-medium ${
+                        trackingInfo.IsPicked_by_Courier === 'Y' ? 'text-green-700' :
+                        'text-gray-500'
+                      }`}>
+                        {trackingInfo.IsPicked_by_Courier === 'Y' ? 'Courier Picked Up' :
+                         'Waiting for Courier'}
+                      </p>
+                      {trackingInfo.IsPicked_by_Courier === 'Y' && trackingInfo.Picked_by_CourierTimeStamp && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(trackingInfo.Picked_by_CourierTimeStamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Dispatched */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.IsDispatched === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.IsDispatched === 'Y' ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        )}
+                      </div>
+                      {trackingInfo.IsDispatched === 'Y' && (
+                        <div className="h-full w-0.5 bg-green-500 flex-grow my-1"></div>
+                      )}
+                    </div>
+                    <div className="ml-4 pb-3">
+                      <p className="font-medium">
+                        {trackingInfo.IsDispatched === 'Y' ? 'Order Dispatched' : 'Waiting for Dispatch'}
+                      </p>
+                      {trackingInfo.IsDispatched === 'Y' && trackingInfo.DispatchedTimeStamp && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(trackingInfo.DispatchedTimeStamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Out for Delivery */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.IsOut_for_Delivery === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.IsOut_for_Delivery === 'Y' ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        )}
+                      </div>
+                      {trackingInfo.IsOut_for_Delivery === 'Y' && (
+                        <div className="h-full w-0.5 bg-green-500 flex-grow my-1"></div>
+                      )}
+                    </div>
+                    <div className="ml-4 pb-3">
+                      <p className="font-medium">
+                        {trackingInfo.IsOut_for_Delivery === 'Y' ? 'Out for Delivery' : 'Not Out for Delivery'}
+                      </p>
+                      {trackingInfo.IsOut_for_Delivery === 'Y' && trackingInfo.Out_for_DeliveryTimeStamp && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(trackingInfo.Out_for_DeliveryTimeStamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Delivered */}
+                  <div className="flex">
+                    <div className="flex flex-col items-center">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full ${
+                        trackingInfo.IsDelivered === 'Y' ? 'bg-green-500' : 'bg-gray-300'
+                      } flex items-center justify-center`}>
+                        {trackingInfo.IsDelivered === 'Y' ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    <div className="ml-4">
+                      <p className="font-medium">
+                        {trackingInfo.IsDelivered === 'Y' ? 'Order Delivered' : 'Not Delivered'}
+                      </p>
+                      {trackingInfo.IsDelivered === 'Y' && trackingInfo.DeliveryTimeStamp && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(trackingInfo.DeliveryTimeStamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -283,6 +453,12 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
     </div>
   )
 }
+
+
+
+
+
+
 
 
 

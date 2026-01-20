@@ -65,7 +65,7 @@ router.post('/customer-login', async (req, res) => {
 
 // User Login Only (Admin, Vendor, Courier)
 router.post('/user-login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role: requestedRole } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Missing fields' });
   let conn;
   try {
@@ -81,17 +81,39 @@ router.post('/user-login', async (req, res) => {
         console.log('DB connection released (user login, invalid password)');
         return res.status(400).json({ error: 'Invalid credentials' });
       }
-      // Determine role
-      let role = 'user';
-      if (user.IsSU === 'Y') role = 'su';
-      else if (user.IsAdmin === 'Y') role = 'admin';
-      else if (user.IsVendor === 'Y') role = 'vendor';
-      else if (user.IsCourier === 'Y') role = 'courier';
+      
+      // Check if user is blacklisted
+      if (user.IsBlackListed === 'Y') {
+        conn.release();
+        console.log('DB connection released (user login, blacklisted)');
+        return res.status(400).json({ error: 'Account is blacklisted. Access denied.' });
+      }
+      
+      // Determine user's actual role
+      let actualRole = null;
+      if (user.IsSU === 'Y') actualRole = 'su';
+      else if (user.IsAdmin === 'Y') actualRole = 'admin';
+      else if (user.IsVendor === 'Y') actualRole = 'vendor';
+      else if (user.IsCourier === 'Y') actualRole = 'courier';
+      
+      // If no role is set for the user, reject login
+      if (!actualRole) {
+        conn.release();
+        console.log('DB connection released (user login, no role)');
+        return res.status(400).json({ error: 'User account has no assigned role. Access denied.' });
+      }
+      
+      // If a specific role was requested, verify it matches the user's actual role
+      if (requestedRole && requestedRole !== actualRole) {
+        conn.release();
+        console.log('DB connection released (user login, role mismatch)');
+        return res.status(400).json({ error: 'Access denied. Incorrect role requested for this account.' });
+      }
       
       const token = jwt.sign({ 
         id: user.UserId, 
         email: user.UserEmail, 
-        role, 
+        role: actualRole, 
         userType: 'user' 
       }, process.env.JWT_SECRET, { expiresIn: '6h' });
       conn.release();
@@ -102,7 +124,7 @@ router.post('/user-login', async (req, res) => {
           id: user.UserId, 
           name: user.User, 
           email: user.UserEmail, 
-          role, 
+          role: actualRole, 
           userType: 'user' 
         } 
       });

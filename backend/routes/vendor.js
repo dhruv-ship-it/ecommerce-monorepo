@@ -10,14 +10,18 @@ function authMiddleware(req, res, next) {
   const token = auth.split(' ')[1];
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('AUTH DEBUG: Decoded user from token:', req.user);
     next();
-  } catch {
+  } catch (err) {
+    console.error('AUTH ERROR: Invalid token:', err.message);
     res.status(401).json({ error: 'Invalid token' });
   }
 }
 
 function vendorOnlyMiddleware(req, res, next) {
+  console.log('VENDOR MIDDLEWARE DEBUG: User role:', req.user.role, 'User ID:', req.user.id);
   if (req.user.role === 'vendor') return next();
+  console.log('VENDOR MIDDLEWARE DEBUG: Access denied for user:', req.user);
   return res.status(403).json({ error: 'Forbidden' });
 }
 
@@ -41,6 +45,7 @@ router.get('/products', authMiddleware, vendorOnlyMiddleware, async (req, res) =
         COALESCE(vp.Discount, 0) as Discount, 
         COALESCE(vp.GST_SS, 0) as GST_SS, 
         COALESCE(vp.StockQty, 0) as StockQty, 
+        COALESCE(vp.MaxStockQty, 0) as MaxStockQty, 
         COALESCE(vp.IsNotAvailable, 'N') as IsNotAvailable,
         COALESCE(u.User, 'Not Assigned') as CourierName, 
         u.UserMobile as CourierMobile
@@ -194,10 +199,11 @@ router.get('/available-products', authMiddleware, vendorOnlyMiddleware, async (r
 
 // Get available couriers for assignment
 router.get('/couriers', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
+  let conn;
   try {
     console.log('=== DEBUG: Couriers Request ===');
     
-    const conn = await db.getConnection();
+    conn = await db.getConnection();
     const couriers = await conn.query(
       'SELECT UserId, User, UserMobile, UserEmail FROM User WHERE IsCourier = "Y" AND IsBlackListed != "Y"'
     );
@@ -226,12 +232,13 @@ router.get('/couriers', authMiddleware, vendorOnlyMiddleware, async (req, res) =
     console.log('Couriers count:', couriersData.length);
     console.log('=== END DEBUG: Couriers Request ===');
     
-    conn.release();
     res.json({ couriers: couriersData });
   } catch (err) {
     console.error('Couriers error:', err);
     console.error('Error stack:', err.stack);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -444,7 +451,7 @@ router.delete('/product/:id', authMiddleware, vendorOnlyMiddleware, async (req, 
 router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   try {
     const conn = await db.getConnection();
-    const [orders] = await conn.query(`
+    const ordersResult = await conn.query(`
       SELECT 
         vpc.PurchaseId as PuchaseId,
         vpc.Product as ProductId,
@@ -452,37 +459,111 @@ router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => 
         p.MRP as ProductPrice,
         vpc.Customer as CustomerId,
         vpc.OrderCreationTimeStamp as OrderDate,
-        vpc.MRP_SS as TotalAmount,
-        'COD' as PaymentMode,
-        'Pending' as PaymentStatus,
-        vpc.Courier as CourierId,
+        COALESCE(prch.TotalAmount, 0) as TotalAmount,
+        COALESCE(prch.PaymentMode, 'COD') as PaymentMode,
+        COALESCE(prch.PaymentStatus, 'Pending') as PaymentStatus,
+        COALESCE(vpc.Courier, vp.Courier) as CourierId,  -- Use default courier from vendorproduct if not assigned in order
         vpc.Vendor as VendorId,
+        c.Customer as CustomerName,
+        c.CustomerEmail,
+        c.CustomerMobile,
+        COALESCE(u.User, default_u.User) as CourierName,  -- Use default courier name if not assigned in order
+        COALESCE(u.UserMobile, default_u.UserMobile) as CourierMobile,  -- Use default courier mobile if not assigned in order
+        CASE 
+          WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
+          WHEN vpc.IsReturned = 'Y' THEN 'Returned'
+          WHEN vpc.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
+          WHEN vpc.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          WHEN COALESCE(vpc.Courier, vp.Courier) = 0 THEN 'No Courier Assigned'
+          ELSE 'Order Placed'
+        END as OrderStatus,
+        CASE
+          WHEN COALESCE(vpc.Courier, vp.Courier) = 0 THEN 'No Courier Assigned'
+          WHEN vpc.IsPicked_by_Courier = 'Y' THEN 'Courier Assigned'
+          WHEN vpc.IsReturned = 'Y' THEN 'Rejected'
+          WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          ELSE 'Courier Assigned'
+        END as CourierAcceptanceStatus,
+        vpc.IsReady_for_Pickup_by_Courier as IsReadyForPickup,
+        vpc.IsPicked_by_Courier,
+        vpc.Courier as ActualCourierId,
+        'Active' as OrderCategory
+      FROM VendorProductCustomerCourier vpc
+      JOIN Product p ON vpc.Product = p.ProductId
+      JOIN Customer c ON vpc.Customer = c.CustomerId
+      JOIN VendorProduct vp ON vpc.Product = vp.Product AND vpc.Vendor = vp.Vendor  -- Join to get default courier
+      LEFT JOIN Purchase prch ON vpc.PurchaseId = prch.PuchaseId
+      LEFT JOIN User u ON vpc.Courier = u.UserId AND u.IsCourier = "Y"  -- Actual assigned courier
+      LEFT JOIN User default_u ON vp.Courier = default_u.UserId AND default_u.IsCourier = "Y"  -- Default courier from vendorproduct
+      WHERE vpc.Vendor = ? AND vpc.IsDeleted != 'Y'
+      UNION ALL
+      SELECT 
+        vpc_arch.PurchaseId as PuchaseId,
+        vpc_arch.Product as ProductId,
+        p.Product,
+        p.MRP as ProductPrice,
+        vpc_arch.Customer as CustomerId,
+        vpc_arch.OrderCreationTimeStamp as OrderDate,
+        COALESCE(prch_arch.TotalAmount, 0) as TotalAmount,
+        COALESCE(prch_arch.PaymentMode, 'COD') as PaymentMode,
+        COALESCE(prch_arch.PaymentStatus, 'Pending') as PaymentStatus,
+        vpc_arch.Courier as CourierId,
+        vpc_arch.Vendor as VendorId,
         c.Customer as CustomerName,
         c.CustomerEmail,
         c.CustomerMobile,
         u.User as CourierName,
         u.UserMobile as CourierMobile,
         CASE 
-          WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
-          WHEN vpc.IsReturned = 'Y' THEN 'Returned'
-          WHEN vpc.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
-          WHEN vpc.IsDispatched = 'Y' THEN 'Dispatched'
-          WHEN vpc.IsPicked_by_Courier = 'Y' AND vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
-          WHEN vpc.IsPicked_by_Courier = 'Y' THEN 'Accepted by Courier'
-          WHEN vpc.Courier = 0 THEN 'No Courier Assigned'
-          ELSE 'Pending Courier Acceptance'
-        END as OrderStatus
-      FROM VendorProductCustomerCourier vpc
-      JOIN Product p ON vpc.Product = p.ProductId
-      JOIN Customer c ON vpc.Customer = c.CustomerId
-      LEFT JOIN User u ON vpc.Courier = u.UserId
-      WHERE vpc.Vendor = ? AND vpc.IsDeleted != 'Y'
-      ORDER BY vpc.OrderCreationTimeStamp DESC
-    `, [req.user.id]);
+          WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
+          WHEN vpc_arch.IsReturned = 'Y' THEN 'Returned'
+          WHEN vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
+          WHEN vpc_arch.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          WHEN COALESCE(vpc_arch.Courier, 0) = 0 THEN 'No Courier Assigned'
+          ELSE 'Order Placed'
+        END as OrderStatus,
+        CASE
+          WHEN COALESCE(vpc_arch.Courier, 0) = 0 THEN 'No Courier Assigned'
+          WHEN vpc_arch.IsPicked_by_Courier = 'Y' THEN 'Courier Assigned'
+          WHEN vpc_arch.IsReturned = 'Y' THEN 'Rejected'
+          WHEN vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
+          ELSE 'Courier Assigned'
+        END as CourierAcceptanceStatus,
+        vpc_arch.IsReady_for_Pickup_by_Courier as IsReadyForPickup,
+        vpc_arch.IsPicked_by_Courier,
+        vpc_arch.Courier as ActualCourierId,
+        'Archived' as OrderCategory
+      FROM vendorproductcustomercourier_arch vpc_arch
+      JOIN Product p ON vpc_arch.Product = p.ProductId
+      JOIN Customer c ON vpc_arch.Customer = c.CustomerId
+      LEFT JOIN purchase_arch prch_arch ON vpc_arch.PurchaseId = prch_arch.PuchaseId
+      LEFT JOIN User u ON vpc_arch.Courier = u.UserId AND u.IsCourier = "Y"
+      WHERE vpc_arch.Vendor = ?
+      ORDER BY OrderDate DESC
+    `, [req.user.id, req.user.id]);
+    
+    // Handle the result properly - MariaDB returns an array where each element is a row
+    let orders = [];
+    if (Array.isArray(ordersResult)) {
+      // If first element is an array, it contains all rows
+      if (Array.isArray(ordersResult[0])) {
+        orders = ordersResult[0];
+      } else {
+        // Otherwise, each element is a row
+        orders = ordersResult;
+      }
+    } else if (ordersResult) {
+      // If it's a single object, make it an array
+      orders = [ordersResult];
+    }
+    
     conn.release();
     res.json({ orders });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Orders fetch error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -507,12 +588,6 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
     
     const order = orderCheck[0];
     
-    // CRITICAL: Prevent courier reassignment after acceptance
-    if (order.IsPicked_by_Courier === 'Y') {
-      conn.release();
-      return res.status(400).json({ error: 'Cannot reassign courier - order has already been accepted by current courier' });
-    }
-    
     // Prevent reassignment if order is already in progress (ready for pickup, dispatched, etc.)
     if (order.IsReady_for_Pickup_by_Courier === 'Y' || 
         order.IsDispatched === 'Y' || 
@@ -534,35 +609,43 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
       return res.status(400).json({ error: 'Invalid or inactive courier' });
     }
     
-    // Only allow assignment if no courier is currently assigned or current courier hasn't accepted
-    if (order.Courier !== 0 && order.Courier !== courierId) {
-      conn.release();
-      return res.status(400).json({ error: 'Order already has a courier assigned. Cancel current assignment first if needed.' });
-    }
-    
-    // Update VendorProductCustomerCourier table - Only assign courier, don't mark as ready
+    // Update VendorProductCustomerCourier table - Assign courier directly
     await conn.query(
-      'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE PurchaseId = ?',
+      'UPDATE VendorProductCustomerCourier SET Courier = ?, IsPicked_by_Courier = "Y", Picked_by_CourierTimeStamp = NOW() WHERE PurchaseId = ?',
       [courierId, req.params.id]
     );
     
+    console.log(`NOTIFICATION: Vendor ${req.user.id} assigned order ${req.params.id} to courier ${courierId}`);
+    
     conn.release();
-    res.json({ message: 'Courier assigned successfully - waiting for courier acceptance' });
+    res.json({ message: 'Courier assigned successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Mark order as ready for pickup - ONLY after courier has accepted
+// Mark order as ready for pickup
 router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   try {
     const conn = await db.getConnection();
     
     // Verify vendor owns this order
-    const [orderCheck] = await conn.query(
+    const orderCheckResult = await conn.query(
       'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Vendor = ?',
       [req.params.id, req.user.id]
     );
+    
+    // Handle query result
+    let orderCheck = [];
+    if (Array.isArray(orderCheckResult)) {
+      if (Array.isArray(orderCheckResult[0])) {
+        orderCheck = orderCheckResult[0];
+      } else {
+        orderCheck = orderCheckResult;
+      }
+    } else if (orderCheckResult) {
+      orderCheck = [orderCheckResult];
+    }
     
     if (!orderCheck || orderCheck.length === 0) {
       conn.release();
@@ -571,28 +654,51 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
     
     const order = orderCheck[0];
     
-    // CRITICAL: Courier must have accepted the order first
-    if (order.IsPicked_by_Courier !== 'Y') {
-      conn.release();
-      return res.status(400).json({ error: 'Cannot mark ready for pickup - courier has not accepted the order yet' });
-    }
-    
     // Check if already marked as ready
     if (order.IsReady_for_Pickup_by_Courier === 'Y') {
       conn.release();
-      return res.status(400).json({ error: 'Order already marked as ready for pickup - cannot undo' });
+      return res.status(400).json({ error: 'Order already marked as ready for pickup' });
     }
+    
+    // Auto-assign courier from vendorproduct if not already assigned
+    let courierId = order.Courier;
+    if (!courierId || courierId === 0) {
+      // Get the default courier from vendorproduct table
+      const [vendorProductResult] = await conn.query(
+        'SELECT Courier FROM VendorProduct WHERE Product = ? AND Vendor = ?',
+        [order.Product, order.Vendor]
+      );
+      
+      if (vendorProductResult && vendorProductResult.length > 0) {
+        courierId = vendorProductResult[0].Courier;
+        
+        // Update the order with the default courier
+        await conn.query(
+          'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE PurchaseId = ?',
+          [courierId, req.params.id]
+        );
+      }
+    }
+    
+    if (!courierId || courierId === 0) {
+      conn.release();
+      return res.status(400).json({ error: 'Cannot mark ready for pickup - no courier assigned' });
+    }
+    
+    // Generate a unique tracking number
+    const trackingNumber = `TRK${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
     
     // Update VendorProductCustomerCourier table
     await conn.query(
-      'UPDATE VendorProductCustomerCourier SET IsReady_for_Pickup_by_Courier = "Y", Ready_for_Pickup_by_CourierTimeStamp = NOW() WHERE PurchaseId = ?',
-      [req.params.id]
+      'UPDATE VendorProductCustomerCourier SET IsReady_for_Pickup_by_Courier = "Y", Ready_for_Pickup_by_CourierTimeStamp = NOW(), TrackingNo = ? WHERE PurchaseId = ?',
+      [trackingNumber, req.params.id]
     );
     
     conn.release();
-    res.json({ message: 'Order marked as ready for pickup - courier will be notified' });
+    res.json({ message: 'Order marked as ready for pickup', trackingNumber });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Mark ready error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -607,7 +713,7 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
     // Update Purchase table status
     await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', [status, req.params.id]);
     
-    // Update VendorProductCustomerCourier table
+    // Update VendorProductCustomerCourier table - ONLY vendor-specific fields
     const updateFields = [];
     const updateValues = [];
     
@@ -624,13 +730,11 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
       updateFields.push('IsReady_for_Pickup_by_Courier = "Y", Ready_for_Pickup_by_CourierTimeStamp = NOW()');
     }
     
-    if (status === 'Shipped') {
-      updateFields.push('IsDispatched = "Y", DispatchedTimeStamp = NOW()');
-    } else if (status === 'Out for Delivery') {
-      updateFields.push('IsOut_for_Delivery = "Y", Out_for_DeliveryTimeStamp = NOW()');
-    } else if (status === 'Delivered') {
-      updateFields.push('IsDelivered = "Y", DeliveryTimeStamp = NOW()');
-    }
+    // Vendors should NOT update delivery status fields - only couriers can do that
+    // These fields are intentionally omitted:
+    // - IsDispatched
+    // - IsOut_for_Delivery
+    // - IsDelivered
     
     if (updateFields.length > 0) {
       await conn.query(
@@ -640,7 +744,7 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
     }
     
     // Get updated order details with product info
-    const [updatedOrder] = await conn.query(
+    const updatedOrderResult = await conn.query(
       'SELECT p.*, vpc.Courier, vpc.TrackingNo, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
@@ -652,10 +756,22 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
       [req.params.id, req.user.id]
     );
     
+    // Handle MariaDB result format
+    let updatedOrder = [];
+    if (Array.isArray(updatedOrderResult)) {
+      if (Array.isArray(updatedOrderResult[0])) {
+        updatedOrder = updatedOrderResult[0];
+      } else {
+        updatedOrder = updatedOrderResult;
+      }
+    } else if (updatedOrderResult) {
+      updatedOrder = [updatedOrderResult];
+    }
+    
     conn.release();
     res.json({ 
       message: 'Order status updated',
-      order: updatedOrder[0]
+      order: updatedOrder[0] || null
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -664,38 +780,61 @@ router.put('/order/:id/status', authMiddleware, vendorOnlyMiddleware, async (req
 
 // Get tracking events for order with product details
 router.get('/order/:id/tracking', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
+  let conn;
   try {
-    const conn = await db.getConnection();
+    conn = await db.getConnection();
     
     // Get order details with product info and tracking information
-    const [order] = await conn.query(
-      'SELECT p.*, vpc.Vendor, vpc.Courier, vpc.TrackingNo, ' +
+    const orderResult = await conn.query(
+      'SELECT vpc.PurchaseId as PuchaseId, vpc.Vendor, COALESCE(vpc.Courier, vp.Courier) as Courier, vpc.TrackingNo, ' +
       'vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp, ' +
       'vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, ' +
       'vpc.IsDispatched, vpc.DispatchedTimeStamp, ' +
       'vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp, ' +
       'vpc.IsDelivered, vpc.DeliveryTimeStamp, ' +
       'vpc.IsReturned, vpc.ReturnTimeStamp, ' +
-      'p.OrderStatus, p.TotalAmount, p.OrderDate, ' +
+      'COALESCE(p.OrderStatus, "Pending") as OrderStatus, ' +
+      'COALESCE(p.TotalAmount, 0) as TotalAmount, ' +
+      'COALESCE(p.OrderDate, vpc.OrderCreationTimeStamp) as OrderDate, ' +
+      'vpc.OrderCreationTimeStamp, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
-      'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
+      'FROM VendorProductCustomerCourier vpc ' +
+      'JOIN VendorProduct vp ON vpc.Product = vp.Product AND vpc.Vendor = vp.Vendor ' +
+      'LEFT JOIN Purchase p ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
-      'WHERE p.PuchaseId = ? AND vpc.Vendor = ?',
+      'LEFT JOIN User u ON vpc.Courier = u.UserId AND u.IsCourier = "Y" ' +
+      'LEFT JOIN User default_u ON vp.Courier = default_u.UserId AND default_u.IsCourier = "Y" ' +
+      'WHERE vpc.PurchaseId = ? AND vpc.Vendor = ?',
       [req.params.id, req.user.id]
     );
     
-    conn.release();
+    // Handle MariaDB result format
+    let order = [];
+    if (Array.isArray(orderResult)) {
+      if (Array.isArray(orderResult[0])) {
+        order = orderResult[0];
+      } else {
+        order = orderResult;
+      }
+    } else if (orderResult) {
+      order = [orderResult];
+    }
     
     if (!order || order.length === 0) {
+      console.log(`Tracking order not found: ID=${req.params.id}, Vendor=${req.user.id}`);
       return res.status(404).json({ error: 'Order not found' });
     }
     
     // Generate tracking events based on the order status fields
     const trackingEvents = [];
     const orderData = order[0];
+
+    if (!orderData) {
+      console.log(`Tracking order data not found: ID=${req.params.id}, Vendor=${req.user.id}`);
+      return res.status(404).json({ error: 'Order data not found' });
+    }
     
     // Add order placed event
     trackingEvents.push({
@@ -777,72 +916,158 @@ router.get('/order/:id/tracking', authMiddleware, vendorOnlyMiddleware, async (r
       order: orderData
     });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Vendor tracking error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-// Add tracking event (dummy endpoint since tracking is in VendorProductCustomerCourier)
+// Add tracking event (RESTRICTED - Only couriers can update delivery status)
 router.post('/order/:id/tracking', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
-  // Since tracking is stored in VendorProductCustomerCourier, we'll update the appropriate status field
-  const { status, location, description } = req.body;
-  if (!status || !location || !description) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  
-  try {
-    const conn = await db.getConnection();
-    
-    // Update the order status based on the tracking event
-    let updateFields = '';
-    if (status === 'Shipped') {
-      updateFields = 'IsDispatched = "Y", DispatchedTimeStamp = NOW()';
-    } else if (status === 'Out for Delivery') {
-      updateFields = 'IsOut_for_Delivery = "Y", Out_for_DeliveryTimeStamp = NOW()';
-    } else if (status === 'Delivered') {
-      updateFields = 'IsDelivered = "Y", DeliveryTimeStamp = NOW()';
-    } else if (status === 'Returned') {
-      updateFields = 'IsReturned = "Y", ReturnTimeStamp = NOW()';
-    }
-    
-    if (updateFields) {
-      await conn.query(
-        `UPDATE VendorProductCustomerCourier SET ${updateFields} WHERE PurchaseId = ?`,
-        [req.params.id]
-      );
-    }
-    
-    conn.release();
-    res.json({ message: 'Tracking event added' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
+  // Vendors should NOT be able to update delivery status fields
+  // Only couriers can update these fields for security and logical workflow reasons
+  return res.status(403).json({ error: 'Only couriers can update delivery status. Please contact the assigned courier for delivery updates.' });
 });
 
 // View order details with product details
 router.get('/order/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
+  let conn;
   try {
-    const conn = await db.getConnection();
-    const [order] = await conn.query(
-      'SELECT p.*, vpc.Courier, vpc.TrackingNo, ' +
+    conn = await db.getConnection();
+    
+    // First check the active table
+    const orderResult = await conn.query(
+      'SELECT vpc.PurchaseId as PuchaseId, vpc.Vendor, vpc.Product as ProductId, vpc.Customer as CustomerId, ' +
+      'COALESCE(vpc.Courier, vp.Courier) as CourierId, vpc.TrackingNo, ' +
+      'vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp, ' +
+      'vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, ' +
+      'vpc.IsDispatched, vpc.DispatchedTimeStamp, ' +
+      'vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp, ' +
+      'vpc.IsDelivered, vpc.DeliveryTimeStamp, ' +
+      'vpc.IsReturned, vpc.ReturnTimeStamp, ' +
+      'vpc.MRP_SS, vpc.Discount_SS, vpc.GST_SS, vpc.PurchaseQty, ' +
+      'vpc.OrderCreationTimeStamp, ' +
+      'COALESCE(prch.PaymentMode, "COD") as PaymentMode, ' +
+      'COALESCE(prch.PaymentStatus, "Pending") as PaymentStatus, ' +
+      'COALESCE(prch.OrderDate, vpc.OrderCreationTimeStamp) as OrderDate, ' +
+      'COALESCE(prch.TotalAmount, 0) as TotalAmount, ' +
+      'CASE ' +
+      '  WHEN vpc.IsDelivered = "Y" THEN "Delivered" ' +
+      '  WHEN vpc.IsReturned = "Y" THEN "Returned" ' +
+      '  WHEN vpc.IsOut_for_Delivery = "Y" THEN "Out for Delivery" ' +
+      '  WHEN vpc.IsDispatched = "Y" THEN "Dispatched" ' +
+      '  WHEN vpc.IsReady_for_Pickup_by_Courier = "Y" THEN "Ready for Pickup" ' +
+      '  WHEN COALESCE(vpc.Courier, vp.Courier) = 0 THEN "No Courier Assigned" ' +
+      '  ELSE "Order Placed" ' +
+      'END as OrderStatus, ' +
+      'CASE ' +
+      '  WHEN COALESCE(vpc.Courier, vp.Courier) = 0 THEN "No Courier Assigned" ' +
+      '  WHEN vpc.IsPicked_by_Courier = "Y" THEN "Courier Assigned" ' +
+      '  WHEN vpc.IsReturned = "Y" THEN "Rejected" ' +
+      '  WHEN vpc.IsReady_for_Pickup_by_Courier = "Y" THEN "Ready for Pickup" ' +
+      '  ELSE "Courier Assigned" ' +
+      'END as CourierAcceptanceStatus, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
-      'c.Customer, c.CustomerEmail, c.CustomerMobile ' +
-      'FROM Purchase p ' +
-      'JOIN VendorProductCustomerCourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
+      'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
+      'COALESCE(u.User, default_u.User) as CourierName, COALESCE(u.UserMobile, default_u.UserMobile) as CourierMobile, ' +
+      '"Active" as OrderCategory ' +
+      'FROM VendorProductCustomerCourier vpc ' +
+      'JOIN VendorProduct vp ON vpc.Product = vp.Product AND vpc.Vendor = vp.Vendor ' +
+      'LEFT JOIN Purchase prch ON prch.PuchaseId = vpc.PurchaseId ' +
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
-      'WHERE p.PuchaseId = ? AND vpc.Vendor = ?',
+      'LEFT JOIN User u ON vpc.Courier = u.UserId AND u.IsCourier = "Y" ' +
+      'LEFT JOIN User default_u ON vp.Courier = default_u.UserId AND default_u.IsCourier = "Y" ' +
+      'WHERE vpc.PurchaseId = ? AND vpc.Vendor = ?',
       [req.params.id, req.user.id]
     );
-    conn.release();
+    
+    // Handle MariaDB result format
+    let order = [];
+    if (Array.isArray(orderResult)) {
+      if (Array.isArray(orderResult[0])) {
+        order = orderResult[0];
+      } else {
+        order = orderResult;
+      }
+    } else if (orderResult) {
+      order = [orderResult];
+    }
+    
+    // If no active order found, check archived table
+    if (!order || order.length === 0) {
+      const archivedOrderResult = await conn.query(
+        'SELECT vpc_arch.PurchaseId as PuchaseId, vpc_arch.Vendor, vpc_arch.Product as ProductId, vpc_arch.Customer as CustomerId, ' +
+        'vpc_arch.Courier as CourierId, vpc_arch.TrackingNo, ' +
+        'vpc_arch.IsReady_for_Pickup_by_Courier, vpc_arch.Ready_for_Pickup_by_CourierTimeStamp, ' +
+        'vpc_arch.IsPicked_by_Courier, vpc_arch.Picked_by_CourierTimeStamp, ' +
+        'vpc_arch.IsDispatched, vpc_arch.DispatchedTimeStamp, ' +
+        'vpc_arch.IsOut_for_Delivery, vpc_arch.Out_for_DeliveryTimeStamp, ' +
+        'vpc_arch.IsDelivered, vpc_arch.DeliveryTimeStamp, ' +
+        'vpc_arch.IsReturned, vpc_arch.ReturnTimeStamp, ' +
+        'vpc_arch.MRP_SS, vpc_arch.Discount_SS, vpc_arch.GST_SS, vpc_arch.PurchaseQty, ' +
+        'vpc_arch.OrderCreationTimeStamp, ' +
+        'COALESCE(prch_arch.PaymentMode, "COD") as PaymentMode, ' +
+        'COALESCE(prch_arch.PaymentStatus, "Pending") as PaymentStatus, ' +
+        'COALESCE(prch_arch.OrderDate, vpc_arch.OrderCreationTimeStamp) as OrderDate, ' +
+        'COALESCE(prch_arch.TotalAmount, 0) as TotalAmount, ' +
+        'CASE ' +
+        '  WHEN vpc_arch.IsDelivered = "Y" THEN "Delivered" ' +
+        '  WHEN vpc_arch.IsReturned = "Y" THEN "Returned" ' +
+        '  WHEN vpc_arch.IsOut_for_Delivery = "Y" THEN "Out for Delivery" ' +
+        '  WHEN vpc_arch.IsDispatched = "Y" THEN "Dispatched" ' +
+        '  WHEN vpc_arch.IsReady_for_Pickup_by_Courier = "Y" THEN "Ready for Pickup" ' +
+        '  WHEN COALESCE(vpc_arch.Courier, 0) = 0 THEN "No Courier Assigned" ' +
+        '  ELSE "Order Placed" ' +
+        'END as OrderStatus, ' +
+        'CASE ' +
+        '  WHEN COALESCE(vpc_arch.Courier, 0) = 0 THEN "No Courier Assigned" ' +
+        '  WHEN vpc_arch.IsPicked_by_Courier = "Y" THEN "Courier Assigned" ' +
+        '  WHEN vpc_arch.IsReturned = "Y" THEN "Rejected" ' +
+        '  WHEN vpc_arch.IsReady_for_Pickup_by_Courier = "Y" THEN "Ready for Pickup" ' +
+        '  ELSE "Courier Assigned" ' +
+        'END as CourierAcceptanceStatus, ' +
+        'pr.Product, pr.MRP as ProductPrice, ' +
+        'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
+        'u.User as CourierName, u.UserMobile as CourierMobile, ' +
+        '"Archived" as OrderCategory ' +
+        'FROM vendorproductcustomercourier_arch vpc_arch ' +
+        'LEFT JOIN purchase_arch prch_arch ON prch_arch.PuchaseId = vpc_arch.PurchaseId ' +
+        'JOIN Product pr ON vpc_arch.Product = pr.ProductId ' +
+        'JOIN Customer c ON vpc_arch.Customer = c.CustomerId ' +
+        'LEFT JOIN User u ON vpc_arch.Courier = u.UserId AND u.IsCourier = "Y" ' +
+        'WHERE vpc_arch.PurchaseId = ? AND vpc_arch.Vendor = ?',
+        [req.params.id, req.user.id]
+      );
+      
+      // Handle MariaDB result format for archived query
+      if (Array.isArray(archivedOrderResult)) {
+        if (Array.isArray(archivedOrderResult[0])) {
+          order = archivedOrderResult[0];
+        } else {
+          order = archivedOrderResult;
+        }
+      } else if (archivedOrderResult) {
+        order = [archivedOrderResult];
+      }
+    }
+    
+    console.log(`ORDER FETCH DEBUG: Query returned ${order.length} results for ID=${req.params.id}, Vendor=${req.user.id}`);
+    console.log(`ORDER FETCH DEBUG: Processed order array:`, order);
     
     if (!order || order.length === 0) {
+      console.log(`Order not found: ID=${req.params.id}, Vendor=${req.user.id}`);
       return res.status(404).json({ error: 'Order not found' });
     }
     
     res.json({ order: order[0] });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Vendor order details error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-export default router; 
+export default router;

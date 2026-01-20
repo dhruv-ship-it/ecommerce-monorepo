@@ -39,6 +39,7 @@ interface Order {
 }
 
 export default function UpdateOrderStatus({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [orderStatus, setOrderStatus] = useState<string>("");
   const [trackingNumber, setTrackingNumber] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
           return;
         }
         
-        const response = await fetch(`http://localhost:4000/vendor/order/${params.id}`, {
+        const response = await fetch(`http://localhost:4000/courier/order/${id}`, {
           headers: {
             Authorization: `Bearer ${validToken.token}`,
           },
@@ -81,7 +82,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
     };
     
     fetchOrder();
-  }, [router, params.id]);
+  }, [router, id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +94,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/vendor/order/${params.id}/status`, {
+      const response = await fetch(`http://localhost:4000/courier/order/${id}/status`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -108,7 +109,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
       if (response.ok) {
         // Show success message and redirect
         alert("Order status updated successfully!");
-        router.push(`/vendor-dashboard/orders/${params.id}/details`);
+        router.push(`/courier-dashboard/orders/${id}/details`);
       } else if (response.status === 401) {
         performAutoLogout("/");
       } else if (response.status === 403) {
@@ -147,12 +148,12 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomGM - Vendor Dashboard
+                EcomGM - Courier Dashboard
               </h1>
             </div>
             <div className="flex items-center">
               <button
-                onClick={() => router.push(`/vendor-dashboard/orders/${params.id}/details`)}
+                onClick={() => router.push(`/courier-dashboard/orders/${id}/details`)}
                 className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
                 Back to Order Details
@@ -167,7 +168,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6">
-                Update Order Status #{params.id}
+                Update Order Status #{id}
               </h3>
               
               {/* Product Details Section */}
@@ -210,13 +211,14 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     required
                   >
-                    <option value="Pending">Pending</option>
-                    {/* Vendors can no longer update delivery status - only couriers can do that */}
-                    <option value="Processing">Processing</option>
-                    <option value="Ready for Pickup">Ready for Pickup</option>
+                    <option value="">Select Status</option>
+                    <option value="Picked Up">Picked Up</option>
+                    <option value="Dispatched">Dispatched</option>
+                    <option value="Out for Delivery">Out for Delivery</option>
+                    <option value="Delivered">Delivered</option>
                   </select>
                   <p className="mt-1 text-sm text-gray-500">
-                    Note: Delivery status updates (Shipped, Out for Delivery, Delivered) can only be made by couriers.
+                    Note: You can only update status for orders that are ready for pickup by you.
                   </p>
                 </div>
                 
@@ -241,10 +243,10 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
                       : order.IsOut_for_Delivery === 'Y' 
                         ? 'Out for Delivery'
                         : order.IsDispatched === 'Y'
-                          ? 'Shipped'
+                          ? 'Dispatched'
                           : order.IsPicked_by_Courier === 'Y'
-                            ? 'Courier Accepted'
-                            : 'Processing'}
+                            ? 'Picked Up'
+                            : 'Ready for Pickup'}
                   </label>
                 </div>
                 
@@ -257,7 +259,7 @@ export default function UpdateOrderStatus({ params }: { params: { id: string } }
                   </button>
                   <button
                     type="button"
-                    onClick={() => router.push(`/vendor-dashboard/orders/${params.id}/details`)}
+                    onClick={() => router.push(`/courier-dashboard/orders/${params.id}/details`)}
                     className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                   >
                     Cancel

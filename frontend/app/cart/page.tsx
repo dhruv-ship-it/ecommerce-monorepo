@@ -141,7 +141,7 @@ export default function CartPage() {
     return sum + ((itemPrice * discount / 100) * Number(item.Quantity));
   }, 0);
   
-  const shipping = subtotal > 1000 ? 0 : 99; // Free shipping above ₹1000
+  const shipping = 0; // Simple free shipping, no extra delivery charges
   const total = subtotal + gstTotal - discountTotal + shipping;
   
   if (!isLoggedIn) {
@@ -279,7 +279,7 @@ export default function CartPage() {
 
               <div className="flex justify-between">
                 <span>Shipping</span>
-                <span>{shipping === 0 ? "FREE" : `₹${shipping}`}</span>
+                <span>FREE</span>
               </div>
 
               <Separator />
@@ -288,12 +288,6 @@ export default function CartPage() {
                 <span>Total</span>
                 <span>₹{total.toLocaleString()}</span>
               </div>
-
-              {shipping > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Add ₹{(1000 - subtotal).toLocaleString()} more for free shipping
-                </p>
-              )}
 
               <Link href="/checkout">
                 <Button className="w-full" size="lg">

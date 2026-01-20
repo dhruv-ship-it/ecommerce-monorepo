@@ -29,8 +29,23 @@ router.post('/place', authMiddleware, async (req, res) => {
     
     const customerId = req.user.id;
     
-    // Get cart items for the customer
-    const [cartItems] = await conn.query('SELECT ProductId, Quantity FROM shoppingcart WHERE CustomerId = ?', [customerId]);
+    // Get cart items for the customer (including VendorProductId for stock updates)
+    const result = await conn.query('SELECT ProductId, VendorProductId, Quantity FROM shoppingcart WHERE CustomerId = ?', [customerId]);
+    
+    // Handle the result properly - MariaDB returns an array where each element is a row
+    let cartItems = [];
+    if (Array.isArray(result)) {
+      // If first element is an array, it contains all rows
+      if (Array.isArray(result[0])) {
+        cartItems = result[0];
+      } else {
+        // Otherwise, each element is a row
+        cartItems = result;
+      }
+    } else if (result) {
+      // If it's a single object, make it an array
+      cartItems = [result];
+    }
     
     if (!cartItems || cartItems.length === 0) {
       conn.release();
@@ -39,110 +54,111 @@ router.post('/place', authMiddleware, async (req, res) => {
     
     // Process each cart item
     for (const item of cartItems) {
-      // Get vendor and default courier for this product
-      const [vendorProduct] = await conn.query(
-        'SELECT Vendor, Courier as DefaultCourier, MRP_SS, Discount_SS, GST_SS FROM vendorproduct WHERE Product = ? AND IsDeleted != "Y" AND IsNotAvailable != "Y" LIMIT 1',
-        [item.ProductId]
+      // Get vendor and default courier for this product using VendorProductId
+      const vendorProductResult = await conn.query(
+        'SELECT VendorProductId, Vendor, Courier as DefaultCourier, MRP_SS, Discount, GST_SS, StockQty FROM vendorproduct WHERE VendorProductId = ? AND IsDeleted != "Y" AND IsNotAvailable != "Y"',
+        [item.VendorProductId]
       );
+      
+      // Handle the result properly - MariaDB returns an array where each element is a row
+      let vendorProduct = [];
+      if (Array.isArray(vendorProductResult)) {
+        // If first element is an array, it contains all rows
+        if (Array.isArray(vendorProductResult[0])) {
+          vendorProduct = vendorProductResult[0];
+        } else {
+          // Otherwise, each element is a row
+          vendorProduct = vendorProductResult;
+        }
+      } else if (vendorProductResult) {
+        // If it's a single object, make it an array
+        vendorProduct = [vendorProductResult];
+      }
       
       if (!vendorProduct || vendorProduct.length === 0) {
         continue; // Skip if product not found in vendor catalog
       }
       
       const vendor = vendorProduct[0];
-      const totalAmount = (parseFloat(vendor.MRP_SS) - parseFloat(vendor.Discount_SS) + parseFloat(vendor.GST_SS)) * item.Quantity;
+
+      // Calculate pricing totals using vendorproduct fields (discount treated as percentage)
+      const mrp = parseFloat(vendor.MRP_SS) || 0;
+      const gst = parseFloat(vendor.GST_SS) || 0;
+      const discountPercent = parseFloat(vendor.Discount) || 0;
+      const discountValuePerUnit = mrp * (discountPercent / 100);
+
+      const mrpTotal = mrp * item.Quantity;
+      const gstTotal = gst * item.Quantity;
+      const discountTotal = discountValuePerUnit * item.Quantity;
+      const totalAmount = mrpTotal - discountTotal + gstTotal;
       
       // Create purchase record
       await conn.query(
-        'INSERT INTO purchase (ProductId, CustomerId, OrderStatus, TotalAmount, PaymentStatus, PaymentMode) VALUES (?, ?, ?, ?, ?, ?)',
-        [item.ProductId, customerId, 'Pending', totalAmount, 'Pending', 'COD']
+        'INSERT INTO purchase (ProductId, CustomerId, OrderStatus, MRP, GST, Discount, TotalAmount, PaymentStatus, PaymentMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [item.ProductId, customerId, 'Pending', mrpTotal, gstTotal, discountTotal, totalAmount, 'Pending', 'COD']
       );
       
-      const [lastPurchase] = await conn.query('SELECT LAST_INSERT_ID() as id');
-      const purchaseId = lastPurchase[0].id;
+      const lastPurchaseResult = await conn.query('SELECT LAST_INSERT_ID() as id');
+      // Handle the result properly
+      let lastPurchase = [];
+      if (Array.isArray(lastPurchaseResult)) {
+        if (Array.isArray(lastPurchaseResult[0])) {
+          lastPurchase = lastPurchaseResult[0];
+        } else {
+          lastPurchase = lastPurchaseResult;
+        }
+      } else if (lastPurchaseResult) {
+        lastPurchase = [lastPurchaseResult];
+      }
+      const purchaseId = lastPurchase && lastPurchase.length > 0 ? lastPurchase[0].id : null;
       
-      // Use default courier from VendorProduct, fallback to any available courier
-      let courierId = vendor.DefaultCourier;
-      
-      if (!courierId || courierId === 0) {
-        const [couriers] = await conn.query(
-          'SELECT UserId FROM user WHERE IsCourier = "Y" AND IsActivated = "Y" LIMIT 1'
-        );
-        courierId = couriers && couriers.length > 0 ? couriers[0].UserId : 0;
+      if (!purchaseId) {
+        console.error('Failed to get purchase ID for product:', item.ProductId);
+        continue; // Skip this item if purchase creation failed
       }
       
+      // Use default courier from VendorProduct directly (no acceptance flow)
+      const courierId = vendor.DefaultCourier || 0;
+      
+      // Create order entry in vendorproductcustomercourier table immediately
+      // IsPicked_by_Courier set to 'Y' if courier assigned, 'N' if no courier
+      const isPickedStatus = courierId ? 'Y' : 'N';
+      
       if (courierId && courierId !== 0) {
-        // Create order entry in vendorproductcustomercourier table
+        // Courier assigned - set as picked immediately and generate tracking number
+        const trackingNumber = `TRK${Date.now()}${purchaseId}`;
         await conn.query(
           `INSERT INTO vendorproductcustomercourier 
            (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
             OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
-            IsPicked_by_Courier, IsDispatched, IsOut_for_Delivery, IsDelivered, 
+            IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, IsOut_for_Delivery, IsDelivered, 
             IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
-          [purchaseId, customerId, item.ProductId, vendor.Vendor, courierId, vendor.MRP_SS, vendor.Discount_SS, vendor.GST_SS, item.Quantity, customerId]
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', ?, 'Y', NOW(), 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
+          [purchaseId, customerId, item.ProductId, vendor.Vendor, courierId, mrp, discountValuePerUnit, gst, item.Quantity, trackingNumber, customerId]
         );
-        
-        // Set up 30-minute timeout for courier acceptance
-        const [orderEntry] = await conn.query('SELECT LAST_INSERT_ID() as id');
-        const orderEntryId = orderEntry[0].id;
-        
-        setTimeout(async () => {
-          try {
-            const timeoutConn = await db.getConnection();
-            // Check if the order is still pending (courier not picked up)
-            const rows = await timeoutConn.query(
-              'SELECT * FROM vendorproductcustomercourier WHERE PurchaseId = ?',
-              [orderEntryId]
-            );
-            
-            // Handle case where no order is found
-            if (!rows || (Array.isArray(rows) && rows.length === 0)) {
-              timeoutConn.release();
-              return;
-            }
-            
-            // Extract the order from the result
-            const order = Array.isArray(rows) ? rows[0] : rows;
-            if (order.IsPicked_by_Courier !== 'Y') {
-              // Order hasn't been accepted yet, try to assign to another courier
-              const [newCouriers] = await timeoutConn.query(
-                'SELECT UserId FROM user WHERE IsCourier = "Y" AND IsActivated = "Y" AND UserId != ? LIMIT 1',
-                [courierId]
-              );
-              
-              if (newCouriers && newCouriers.length > 0) {
-                const newCourierId = newCouriers[0].UserId;
-                
-                // Update courier assignment
-                await timeoutConn.query(
-                  'UPDATE vendorproductcustomercourier SET Courier = ? WHERE PurchaseId = ?',
-                  [newCourierId, purchaseId]
-                );
-                
-                console.log(`Order ${purchaseId} reassigned to courier ${newCourierId}`);
-              } else {
-                // No other couriers available, mark as no available courier
-                await timeoutConn.query(
-                  'UPDATE purchase SET OrderStatus = "No Courier Available" WHERE PuchaseId = ?',
-                  [purchaseId]
-                );
-                
-                // Clear courier assignment
-                await timeoutConn.query(
-                  'UPDATE vendorproductcustomercourier SET Courier = 0 WHERE PurchaseId = ?',
-                  [purchaseId]
-                );
-                
-                console.log(`Order ${purchaseId} marked as no courier available`);
-              }
-            }
-            timeoutConn.release();
-          } catch (error) {
-            console.error(`Error in timeout handler for order ${purchaseId}:`, error);
-          }
-        }, 30 * 60 * 1000); // 30 minutes timeout
+      } else {
+        // No courier assigned - vendor must assign later
+        await conn.query(
+          `INSERT INTO vendorproductcustomercourier 
+           (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
+            OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
+            IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, IsOut_for_Delivery, IsDelivered, 
+            IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', '0000-00-00 00:00:00', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
+          [purchaseId, customerId, item.ProductId, vendor.Vendor, 0, mrp, discountValuePerUnit, gst, item.Quantity, customerId]
+        );
       }
+      
+      console.log(`NOTIFICATION: New order ${purchaseId} created with courier ${courierId || 'none (vendor must assign)'}`);
+      
+      // Decrement stock quantity for the vendor product
+      const currentStock = parseFloat(vendor.StockQty) || 0;
+      const newStock = Math.max(0, currentStock - item.Quantity);
+      await conn.query(
+        'UPDATE vendorproduct SET StockQty = ? WHERE VendorProductId = ?',
+        [newStock, vendor.VendorProductId]
+      );
+      console.log(`Stock updated for VendorProductId ${vendor.VendorProductId}: ${currentStock} -> ${newStock}`);
     }
     
     // Clear cart
@@ -176,14 +192,42 @@ router.get('/history', authMiddleware, async (req, res) => {
        vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, 
        vpc.IsDispatched, vpc.DispatchedTimeStamp,
        vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp,
-       vpc.IsDelivered, vpc.DeliveryTimeStamp
+       vpc.IsDelivered, vpc.DeliveryTimeStamp,
+       vpc.IsReturned, vpc.ReturnTimeStamp,
+       CASE
+         WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
+         WHEN vpc.IsDispatched = 'Y' OR vpc.IsOut_for_Delivery = 'Y' THEN 'Shipped'
+         WHEN vpc.IsPicked_by_Courier = 'Y' OR vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Processing'
+         ELSE 'Processing'
+       END as OrderCategory,
+       'Active' as OrderSource
        FROM purchase p
        JOIN product pr ON p.ProductId = pr.ProductId
        JOIN model m ON pr.Model = m.ModelId
        LEFT JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId
        WHERE p.CustomerId = ? 
-       ORDER BY p.OrderDate DESC`,
-      [customerId]
+       UNION ALL
+       SELECT p_arch.*, m.ModelId as ModelId, vpc_arch.Vendor, vpc_arch.Courier, vpc_arch.TrackingNo, 
+       vpc_arch.IsReady_for_Pickup_by_Courier, vpc_arch.Ready_for_Pickup_by_CourierTimeStamp,
+       vpc_arch.IsPicked_by_Courier, vpc_arch.Picked_by_CourierTimeStamp, 
+       vpc_arch.IsDispatched, vpc_arch.DispatchedTimeStamp,
+       vpc_arch.IsOut_for_Delivery, vpc_arch.Out_for_DeliveryTimeStamp,
+       vpc_arch.IsDelivered, vpc_arch.DeliveryTimeStamp,
+       vpc_arch.IsReturned, vpc_arch.ReturnTimeStamp,
+       CASE
+         WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
+         WHEN vpc_arch.IsDispatched = 'Y' OR vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Shipped'
+         WHEN vpc_arch.IsPicked_by_Courier = 'Y' OR vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Processing'
+         ELSE 'Processing'
+       END as OrderCategory,
+       'Archived' as OrderSource
+       FROM purchase_arch p_arch
+       JOIN product pr ON p_arch.ProductId = pr.ProductId
+       JOIN model m ON pr.Model = m.ModelId
+       LEFT JOIN vendorproductcustomercourier_arch vpc_arch ON p_arch.PuchaseId = vpc_arch.PurchaseId
+       WHERE p_arch.CustomerId = ? 
+       ORDER BY OrderDate DESC`,
+      [customerId, customerId]
     );
     conn.release();
     
@@ -222,27 +266,69 @@ router.get('/:orderId', authMiddleware, async (req, res) => {
     
     const customerId = req.user.id;
     
+    // First check active orders
     const rows = await conn.query(
       `SELECT p.*, vpc.Vendor, vpc.Courier, vpc.TrackingNo, 
        vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp,
        vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, 
        vpc.IsDispatched, vpc.DispatchedTimeStamp,
        vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp,
-       vpc.IsDelivered, vpc.DeliveryTimeStamp
+       vpc.IsDelivered, vpc.DeliveryTimeStamp,
+       vpc.IsReturned, vpc.ReturnTimeStamp,
+       CASE
+         WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
+         WHEN vpc.IsDispatched = 'Y' OR vpc.IsOut_for_Delivery = 'Y' THEN 'Shipped'
+         WHEN vpc.IsPicked_by_Courier = 'Y' OR vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Processing'
+         ELSE 'Processing'
+       END as OrderCategory,
+       'Active' as OrderSource
        FROM purchase p
        LEFT JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId
        WHERE p.PuchaseId = ? AND p.CustomerId = ?`,
       [req.params.orderId, customerId]
     );
+    
+    // Handle case where no active order is found
+    let order = null;
+    if (rows && Array.isArray(rows) && rows.length > 0) {
+      order = rows[0];
+    }
+    
+    // If no active order found, check archived orders
+    if (!order) {
+      const archivedRows = await conn.query(
+        `SELECT p_arch.*, vpc_arch.Vendor, vpc_arch.Courier, vpc_arch.TrackingNo, 
+         vpc_arch.IsReady_for_Pickup_by_Courier, vpc_arch.Ready_for_Pickup_by_CourierTimeStamp,
+         vpc_arch.IsPicked_by_Courier, vpc_arch.Picked_by_CourierTimeStamp, 
+         vpc_arch.IsDispatched, vpc_arch.DispatchedTimeStamp,
+         vpc_arch.IsOut_for_Delivery, vpc_arch.Out_for_DeliveryTimeStamp,
+         vpc_arch.IsDelivered, vpc_arch.DeliveryTimeStamp,
+         vpc_arch.IsReturned, vpc_arch.ReturnTimeStamp,
+         CASE
+           WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
+           WHEN vpc_arch.IsDispatched = 'Y' OR vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Shipped'
+           WHEN vpc_arch.IsPicked_by_Courier = 'Y' OR vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Processing'
+           ELSE 'Processing'
+         END as OrderCategory,
+         'Archived' as OrderSource
+         FROM purchase_arch p_arch
+         LEFT JOIN vendorproductcustomercourier_arch vpc_arch ON p_arch.PuchaseId = vpc_arch.PurchaseId
+         WHERE p_arch.PuchaseId = ? AND p_arch.CustomerId = ?`,
+        [req.params.orderId, customerId]
+      );
+      
+      if (archivedRows && Array.isArray(archivedRows) && archivedRows.length > 0) {
+        order = archivedRows[0];
+      }
+    }
+    
     conn.release();
     
     // Handle case where no order is found
-    if (!rows || (Array.isArray(rows) && rows.length === 0)) {
+    if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
     
-    // Extract the order from the result
-    const order = Array.isArray(rows) ? rows[0] : rows;
     res.json({ order });
   } catch (err) {
     console.error('Order details error:', err);
@@ -264,7 +350,7 @@ router.get('/:orderId/tracking', authMiddleware, async (req, res) => {
     const customerId = req.user.id;
     
     // Get order details with product info and tracking information
-    const rows = await conn.query(
+    let rows = await conn.query(
       'SELECT p.*, vpc.Vendor, vpc.Courier, vpc.TrackingNo, ' +
       'vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp, ' +
       'vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, ' +
@@ -276,7 +362,8 @@ router.get('/:orderId/tracking', authMiddleware, async (req, res) => {
       'pr.Product as ProductName, pr.MRP as ProductPrice, ' +
       'c.Customer as CustomerName, c.CustomerEmail, c.CustomerMobile, ' +
       'v.User as VendorName, v.UserMobile as VendorMobile, ' +
-      'u.User as CourierName, u.UserMobile as CourierMobile ' +
+      'u.User as CourierName, u.UserMobile as CourierMobile, ' +
+      '\'Active\' as OrderSource ' +
       'FROM purchase p ' +
       'JOIN vendorproductcustomercourier vpc ON p.PuchaseId = vpc.PurchaseId ' +
       'JOIN product pr ON vpc.Product = pr.ProductId ' +
@@ -287,15 +374,49 @@ router.get('/:orderId/tracking', authMiddleware, async (req, res) => {
       [req.params.orderId, customerId]
     );
     
+    let orderData = null;
+    // Handle case where no active order is found
+    if (rows && Array.isArray(rows) && rows.length > 0) {
+      orderData = rows[0];
+    }
+    
+    // If no active order found, check archived orders
+    if (!orderData) {
+      const archivedRows = await conn.query(
+        'SELECT p_arch.*, vpc_arch.Vendor, vpc_arch.Courier, vpc_arch.TrackingNo, ' +
+        'vpc_arch.IsReady_for_Pickup_by_Courier, vpc_arch.Ready_for_Pickup_by_CourierTimeStamp, ' +
+        'vpc_arch.IsPicked_by_Courier, vpc_arch.Picked_by_CourierTimeStamp, ' +
+        'vpc_arch.IsDispatched, vpc_arch.DispatchedTimeStamp, ' +
+        'vpc_arch.IsOut_for_Delivery, vpc_arch.Out_for_DeliveryTimeStamp, ' +
+        'vpc_arch.IsDelivered, vpc_arch.DeliveryTimeStamp, ' +
+        'vpc_arch.IsReturned, vpc_arch.ReturnTimeStamp, ' +
+        'p_arch.OrderStatus, p_arch.TotalAmount, p_arch.OrderDate, ' +
+        'pr.Product as ProductName, pr.MRP as ProductPrice, ' +
+        'c.Customer as CustomerName, c.CustomerEmail, c.CustomerMobile, ' +
+        'v.User as VendorName, v.UserMobile as VendorMobile, ' +
+        'u.User as CourierName, u.UserMobile as CourierMobile, ' +
+        '\'Archived\' as OrderSource ' +
+        'FROM purchase_arch p_arch ' +
+        'JOIN vendorproductcustomercourier_arch vpc_arch ON p_arch.PuchaseId = vpc_arch.PurchaseId ' +
+        'JOIN product pr ON vpc_arch.Product = pr.ProductId ' +
+        'JOIN customer c ON vpc_arch.Customer = c.CustomerId ' +
+        'JOIN user v ON vpc_arch.Vendor = v.UserId ' +
+        'LEFT JOIN user u ON vpc_arch.Courier = u.UserId ' +
+        'WHERE p_arch.PuchaseId = ? AND vpc_arch.Customer = ?',
+        [req.params.orderId, customerId]
+      );
+      
+      if (archivedRows && Array.isArray(archivedRows) && archivedRows.length > 0) {
+        orderData = archivedRows[0];
+      }
+    }
+    
     conn.release();
     
     // Handle case where no order is found
-    if (!rows || (Array.isArray(rows) && rows.length === 0)) {
+    if (!orderData) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
-    // Extract the order from the result
-    const orderData = Array.isArray(rows) ? rows[0] : rows;
     
     // Generate tracking events based on the order status fields
     const trackingEvents = [];
@@ -310,64 +431,79 @@ router.get('/:orderId/tracking', authMiddleware, async (req, res) => {
       timestamp: orderData.OrderDate
     });
     
-    // Add status updates based on order fields
+    // Add courier acceptance event if applicable
     if (orderData.IsPicked_by_Courier === 'Y' && orderData.Picked_by_CourierTimeStamp && orderData.Picked_by_CourierTimeStamp !== '0000-00-00 00:00:00') {
       trackingEvents.push({
-        TrackingEventId: 2,
+        TrackingEventId: 1.5,
         PurchaseId: orderData.PuchaseId,
-        status: "Courier Accepted",
+        status: "Courier Picked Up",
         location: "Vendor Location",
-        description: `Order #${orderData.PuchaseId} accepted by courier ${orderData.CourierName || 'N/A'}.`,
+        description: `Order #${orderData.PuchaseId} picked up by courier.`,
         timestamp: orderData.Picked_by_CourierTimeStamp
       });
     }
+
+    // Add courier did not pick up event if applicable
+    if (orderData.IsPicked_by_Courier === 'N' && orderData.IsReturned === 'Y' && orderData.ReturnTimeStamp && orderData.ReturnTimeStamp !== '0000-00-00 00:00:00') {
+      trackingEvents.push({
+        TrackingEventId: 1.6,
+        PurchaseId: orderData.PurchaseId,
+        status: "Courier Did Not Pick Up",
+        location: "Vendor Location",
+        description: `Courier did not pick up order #${orderData.PuchaseId}.`,
+        timestamp: orderData.ReturnTimeStamp
+      });
+    }
     
+    // Add status updates based on vendorproductcustomercourier fields
     if (orderData.IsReady_for_Pickup_by_Courier === 'Y' && orderData.Ready_for_Pickup_by_CourierTimeStamp && orderData.Ready_for_Pickup_by_CourierTimeStamp !== '0000-00-00 00:00:00') {
       trackingEvents.push({
-        TrackingEventId: 3,
+        TrackingEventId: 2,
         PurchaseId: orderData.PuchaseId,
         status: "Ready for Pickup",
         location: "Vendor Location",
-        description: `Order #${orderData.PuchaseId} marked ready for pickup by vendor ${orderData.VendorName || 'N/A'}.`,
+        description: `Order #${orderData.PuchaseId} is ready for pickup.`,
         timestamp: orderData.Ready_for_Pickup_by_CourierTimeStamp
       });
     }
     
     if (orderData.IsDispatched === 'Y' && orderData.DispatchedTimeStamp && orderData.DispatchedTimeStamp !== '0000-00-00 00:00:00') {
       trackingEvents.push({
-        TrackingEventId: 4,
-        PurchaseId: orderData.PuchaseId,
+        TrackingEventId: 3,
+        PurchaseId: orderData.PurchaseId,
         status: "Shipped",
         location: "Distribution Center",
-        description: `Order #${orderData.PuchaseId} has been shipped and is ready for delivery.`,
+        description: `Order #${orderData.PuchaseId} has been shipped.`,
         timestamp: orderData.DispatchedTimeStamp
       });
     }
     
     if (orderData.IsOut_for_Delivery === 'Y' && orderData.Out_for_DeliveryTimeStamp && orderData.Out_for_DeliveryTimeStamp !== '0000-00-00 00:00:00') {
       trackingEvents.push({
-        TrackingEventId: 5,
-        PurchaseId: orderData.PuchaseId,
+        TrackingEventId: 4,
+        PurchaseId: orderData.PurchaseId,
         status: "Out for Delivery",
         location: "Local Delivery Hub",
-        description: `Order #${orderData.PuchaseId} is out for delivery by courier ${orderData.CourierName || 'N/A'}.`,
+        description: `Order #${orderData.PuchaseId} is out for delivery.`,
         timestamp: orderData.Out_for_DeliveryTimeStamp
       });
     }
     
     if (orderData.IsDelivered === 'Y' && orderData.DeliveryTimeStamp && orderData.DeliveryTimeStamp !== '0000-00-00 00:00:00') {
       trackingEvents.push({
-        TrackingEventId: 6,
-        PurchaseId: orderData.PuchaseId,
+        TrackingEventId: 5,
+        PurchaseId: orderData.PurchaseId,
         status: "Delivered",
         location: "Customer Address",
         description: `Order #${orderData.PuchaseId} has been successfully delivered.`,
         timestamp: orderData.DeliveryTimeStamp
       });
     } else if (orderData.IsReturned === 'Y' && orderData.ReturnTimeStamp && orderData.ReturnTimeStamp !== '0000-00-00 00:00:00') {
+      // Courier rejection is already added above with TrackingEventId 1.6
+      // This is kept for the return after delivery scenario
       trackingEvents.push({
         TrackingEventId: 6,
-        PurchaseId: orderData.PuchaseId,
+        PurchaseId: orderData.PurchaseId,
         status: "Returned",
         location: "Vendor Location",
         description: `Order #${orderData.PuchaseId} has been returned.`,

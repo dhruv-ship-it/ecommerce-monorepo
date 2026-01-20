@@ -746,4 +746,239 @@ router.get('/:modelId/products/:productId/vendors', async (req, res) => {
   }
 });
 
+// Fuzzy search models by name (case-insensitive, partial match)
+router.get('/search/:query', async (req, res) => {
+  try {
+    const conn = await db.getConnection();
+    const searchQuery = req.params.query.toLowerCase().trim();
+
+    if (!searchQuery) {
+      conn.release();
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    // Split the search query by spaces to handle multiple words
+    const searchTerms = searchQuery.split(/\s+/).filter(term => term.length > 0);
+
+    if (searchTerms.length === 0) {
+      conn.release();
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    // Build dynamic query for multiple search terms
+    let query = `
+      SELECT 
+        m.ModelId,
+        m.Model,
+        m.Brand,
+        m.IsWaterResistant,
+        m.IsFireProof,
+        m.IsEcoFriendly,
+        m.IsRecyclable,
+        m.Warranty,
+        m.Guarantee
+      FROM Model m
+      WHERE m.IsDeleted != 'Y'
+    `;
+
+    // Add conditions for each search term (fuzzy matching)
+    const conditions = [];
+    for (let i = 0; i < searchTerms.length; i++) {
+      conditions.push(`LOWER(m.Model) LIKE ?`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` AND (${conditions.join(' AND ')})`;
+    }
+
+    query += ` ORDER BY m.Model ASC`;
+
+    // Prepare parameters for each search term
+    const params = searchTerms.map(term => `%${term}%`);
+
+    const models = await conn.query(query, params);
+
+    // Process each model (similar to the main list endpoint)
+    for (let model of models) {
+      // Try to get brand name
+      try {
+        const brand = await conn.query(`
+          SELECT Brand FROM Brand WHERE BrandId = ?
+        `, [model.Brand]);
+        model.BrandName = brand[0]?.Brand || 'Unknown Brand';
+      } catch (err) {
+        console.log('Brand query error:', err.message);
+        model.BrandName = 'Unknown Brand';
+      }
+
+      // Try to get material name
+      try {
+        const material = await conn.query(`
+          SELECT Material FROM Material WHERE MaterialId = ?
+        `, [model.Material]);
+        model.MaterialName = material[0]?.Material || 'N/A';
+      } catch (err) {
+        console.log('Material query error:', err.message);
+        model.MaterialName = 'N/A';
+      }
+
+      // Set defaults
+      model.ProductCount = 0;
+      model.MinPrice = 0;
+      model.MaxPrice = 0;
+      model.ProductCategoryId = null;
+      model.ProductCategory = null;
+      model.availableColors = [];
+      model.availableSizes = [];
+      model.availableColorIds = [];
+      model.availableSizeIds = [];
+      model.thumbnail = '/placeholder.svg';
+      model.mainImage = '/placeholder.svg';
+
+      // Ensure all numeric fields are properly converted from BigInt
+      model.ModelId = Number(model.ModelId);
+      model.Brand = Number(model.Brand);
+
+      // Get basic product count and pricing from vendor products
+      try {
+        const productCount = await conn.query(`
+          SELECT COUNT(*) as count FROM Product WHERE Model = ? AND (IsDeleted = '' OR IsDeleted = 'N')
+        `, [model.ModelId]);
+
+        // Convert BigInt to Number for JSON serialization
+        model.ProductCount = Number(productCount[0]?.count) || 0;
+
+        // Get comprehensive price range from both vendor products and base MRP
+        if (model.ProductCount > 0) {
+          const allPrices = [];
+
+          // Get vendor prices where available
+          const vendorPrices = await conn.query(`
+            SELECT vp.MRP_SS
+            FROM Product p
+            LEFT JOIN VendorProduct vp ON p.ProductId = vp.Product
+            WHERE p.Model = ? 
+              AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+              AND (vp.IsDeleted != 'Y' AND vp.IsNotAvailable != 'Y')
+              AND vp.MRP_SS > 0
+          `, [model.ModelId]);
+
+          // Add vendor prices to array
+          vendorPrices.forEach(vp => {
+            allPrices.push(Number(vp.MRP_SS));
+          });
+
+          // Get MRP for products that don't have vendor pricing or as fallback
+          const productPrices = await conn.query(`
+            SELECT p.MRP
+            FROM Product p
+            WHERE p.Model = ? 
+              AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+              AND p.MRP > 0
+          `, [model.ModelId]);
+
+          // Add product MRP prices to array (these act as fallback or additional options)
+          productPrices.forEach(pp => {
+            allPrices.push(Number(pp.MRP));
+          });
+
+          // Calculate min/max from all available prices
+          if (allPrices.length > 0) {
+            model.MinPrice = Math.min(...allPrices);
+            model.MaxPrice = Math.max(...allPrices);
+          } else {
+            model.MinPrice = 0;
+            model.MaxPrice = 0;
+          }
+        }
+
+        // Get available colors for this model
+        try {
+          const colors = await conn.query(`
+            SELECT DISTINCT c.ColorId, c.Color
+            FROM Product p
+            LEFT JOIN Color c ON p.Color = c.ColorId
+            WHERE p.Model = ? AND (p.IsDeleted = '' OR p.IsDeleted = 'N') AND c.Color IS NOT NULL
+            ORDER BY c.Color
+          `, [model.ModelId]);
+
+          model.availableColors = colors.map(c => c.Color);
+          model.availableColorIds = colors.map(c => Number(c.ColorId));
+        } catch (err) {
+          console.log('Colors query error:', err.message);
+        }
+
+        // Get available sizes for this model (including products with no size)
+        try {
+          const sizes = await conn.query(`
+            SELECT DISTINCT 
+              CASE WHEN p.Size = 0 THEN 0 ELSE s.SizeId END as SizeId,
+              CASE WHEN p.Size = 0 THEN 'One Size' ELSE s.Size END as Size
+            FROM Product p
+            LEFT JOIN Size s ON p.Size = s.SizeId
+            WHERE p.Model = ? AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+            ORDER BY SizeId
+          `, [model.ModelId]);
+
+          model.availableSizes = sizes.map(s => s.Size);
+          model.availableSizeIds = sizes.map(s => Number(s.SizeId));
+        } catch (err) {
+          console.log('Sizes query error:', err.message);
+        }
+
+        // Get the first available product's image for the model thumbnail
+        try {
+          const firstProduct = await conn.query(`
+            SELECT p.ProductId
+            FROM Product p
+            WHERE p.Model = ? AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
+            ORDER BY p.ProductId ASC
+            LIMIT 1
+          `, [model.ModelId]);
+
+          if (firstProduct && firstProduct.length > 0) {
+            const productId = firstProduct[0].ProductId;
+
+            // Get images for this product
+            const images = await conn.query(`
+              SELECT ImageType, ImagePath, ImageOrder 
+              FROM product_images 
+              WHERE ProductId = ? AND IsActive = 'Y' 
+              ORDER BY ImageOrder ASC
+            `, [productId]);
+
+            if (images && images.length > 0) {
+              // Try to get main image first, otherwise use the first available image
+              const mainImg = images.find(img => img.ImageType === 'main');
+              const thumbnailImg = images.find(img => img.ImageType === 'thumbnail');
+
+              if (mainImg) {
+                model.mainImage = mainImg.ImagePath;
+                model.thumbnail = mainImg.ImagePath;
+              } else if (thumbnailImg) {
+                model.mainImage = thumbnailImg.ImagePath;
+                model.thumbnail = thumbnailImg.ImagePath;
+              } else {
+                // Use first available image
+                model.mainImage = images[0].ImagePath;
+                model.thumbnail = images[0].ImagePath;
+              }
+            }
+          }
+        } catch (err) {
+          console.log('Image query error:', err.message);
+        }
+      } catch (err) {
+        console.log('Product count/pricing error:', err.message);
+      }
+    }
+
+    conn.release();
+    res.json({ models, searchQuery: req.params.query, resultCount: models.length });
+  } catch (err) {
+    console.error('Error searching models:', err.message);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
+});
+
 export default router;

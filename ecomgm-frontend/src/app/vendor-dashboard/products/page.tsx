@@ -11,6 +11,7 @@ interface Product {
   Description: string;
   Price: number;
   StockQty: number;
+  MaxStockQty: number;
   IsNotAvailable: string;
   MRP_SS: number;
   Discount: number;
@@ -314,7 +315,26 @@ export default function VendorProducts() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {product.StockQty}
+                            <div className="flex items-center">
+                              <span>{product.StockQty}</span>
+                              {product.MaxStockQty && (
+                                <span className="ml-2 text-xs text-gray-400">
+                                  of {product.MaxStockQty}
+                                </span>
+                              )}
+                              {product.MaxStockQty && product.MaxStockQty > 0 && (
+                                <span 
+                                  className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                    ${product.StockQty / product.MaxStockQty <= 0.1 
+                                      ? 'bg-red-100 text-red-800' 
+                                      : product.StockQty / product.MaxStockQty <= 0.3 
+                                        ? 'bg-orange-100 text-orange-800' 
+                                        : 'bg-green-100 text-green-800'}`}
+                                >
+                                  {Math.round((product.StockQty / product.MaxStockQty) * 100)}%
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {product.CourierName ? (

@@ -52,7 +52,8 @@ export default function SUDashboard() {
   
   // User creation state
   const [createData, setCreateData] = useState({
-    name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin"
+    name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin",
+    isVerified: "Y", isActivated: "Y"
   });
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
@@ -166,12 +167,16 @@ export default function SUDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("su_token")}`,
         },
-        body: JSON.stringify(createData),
+        body: JSON.stringify({
+          ...createData,
+          isVerified: createData.isVerified,
+          isActivated: createData.isActivated
+        }),
       });
       const data = await response.json();
       if (response.ok) {
         setCreateSuccess("User created successfully!");
-        setCreateData({ name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin" });
+        setCreateData({ name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin", isVerified: "Y", isActivated: "Y" });
         fetchUsers();
       } else {
         setCreateError(data.error || "Failed to create user");
@@ -397,6 +402,28 @@ export default function SUDashboard() {
                       <option value="courier">Courier</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Verified</label>
+                    <select
+                      value={createData.isVerified}
+                      onChange={(e) => setCreateData({ ...createData, isVerified: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="Y">Yes</option>
+                      <option value="">No</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Activated</label>
+                    <select
+                      value={createData.isActivated}
+                      onChange={(e) => setCreateData({ ...createData, isActivated: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="Y">Yes</option>
+                      <option value="">No</option>
+                    </select>
+                  </div>
                 </div>
                 {createError && <div className="text-red-600 text-sm">{createError}</div>}
                 {createSuccess && <div className="text-green-600 text-sm">{createSuccess}</div>}
@@ -455,12 +482,16 @@ export default function SUDashboard() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span
                               className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                user.IsVerified === "Y" && user.IsActivated === "Y"
+                                user.IsBlackListed === "Y"
+                                  ? "bg-red-100 text-red-800"
+                                  : user.IsActivated === "Y"
                                   ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-800"
                               }`}
                             >
-                              {user.IsVerified === "Y" && user.IsActivated === "Y"
+                              {user.IsBlackListed === "Y"
+                                ? "Blacklisted"
+                                : user.IsActivated === "Y"
                                 ? "Active"
                                 : "Inactive"}
                             </span>

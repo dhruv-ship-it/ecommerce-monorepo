@@ -143,19 +143,28 @@ export default function AdminDashboard() {
               <div className="mt-8">
                 <h4 className="text-md font-medium text-gray-900 mb-4">Quick Actions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
-                    <h5 className="font-medium text-gray-900">View Customers</h5>
-                    <p className="text-sm text-gray-500">Manage customer accounts</p>
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/users')}
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left cursor-pointer"
+                  >
+                    <h5 className="font-medium text-gray-900">Manage Users</h5>
+                    <p className="text-sm text-gray-500">Create and manage admin, vendor, courier accounts</p>
                   </button>
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/orders')}
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left cursor-pointer"
+                  >
                     <h5 className="font-medium text-gray-900">View Orders</h5>
-                    <p className="text-sm text-gray-500">Monitor order status</p>
+                    <p className="text-sm text-gray-500">Monitor order status and tracking</p>
                   </button>
                   <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
                     <h5 className="font-medium text-gray-900">Manage Products</h5>
                     <p className="text-sm text-gray-500">Add or edit products</p>
                   </button>
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/reports')}
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left cursor-pointer"
+                  >
                     <h5 className="font-medium text-gray-900">Reports</h5>
                     <p className="text-sm text-gray-500">View analytics and reports</p>
                   </button>

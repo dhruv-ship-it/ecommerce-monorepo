@@ -48,6 +48,7 @@ interface TrackingEvent {
 }
 
 export default function TrackingDetail({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,10 +140,12 @@ export default function TrackingDetail({ params }: { params: { id: string } }) {
       
       // Determine status based on current order status
       let status = 'Unknown';
-      if (order?.IsOut_for_Delivery === 'N' && order?.IsDelivered === 'N') {
+      if (order?.IsDispatched === 'Y' && order?.IsOut_for_Delivery === 'N' && order?.IsDelivered === 'N') {
         status = 'Out for Delivery';
       } else if (order?.IsOut_for_Delivery === 'Y' && order?.IsDelivered === 'N') {
         status = 'Delivered';
+      } else if (order?.IsPicked_by_Courier === 'Y' && order?.IsReady_for_Pickup_by_Courier === 'Y' && order?.IsDispatched === 'N') {
+        status = 'Shipped';
       }
       
       const response = await fetch(`http://localhost:4000/courier/order/${params.id}/tracking`, {
@@ -183,6 +186,11 @@ export default function TrackingDetail({ params }: { params: { id: string } }) {
         // Clear form
         setLocation('');
         setDescription('');
+      } else if (response.status === 401) {
+        performAutoLogout("/");
+      } else {
+        const errorData = await response.json();
+        alert(`Error adding tracking event: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error adding tracking event:', error);

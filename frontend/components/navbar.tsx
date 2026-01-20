@@ -221,7 +221,7 @@ export function Navbar() {
             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <ShoppingBag className="text-white h-5 w-5" />
             </div>
-            <span className="font-bold text-xl hidden sm:inline-block">FootStyle</span>
+            <span className="font-bold text-xl hidden sm:inline-block">Onlinekart</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -242,14 +242,6 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
-
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md mx-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input type="search" placeholder="Search products..." className="pl-10 pr-4" />
-            </div>
-          </div>
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-2">

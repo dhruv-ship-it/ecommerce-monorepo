@@ -7,12 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CreditCard, Truck, MapPin, Shield } from "lucide-react"
-import Image from "next/image"
+import { MapPin, Shield } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { validateCustomerAuth, performCustomerLogout } from "../../utils/auth"
 
@@ -39,7 +36,6 @@ interface CartItem {
 export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState("card")
   const [shippingAddress, setShippingAddress] = useState({
     fullName: "",
     email: "",
@@ -103,7 +99,7 @@ export default function CheckoutPage() {
     return sum + (price * item.Quantity);
   }, 0);
   
-  const shipping = subtotal > 1000 ? 0 : 99; // Free shipping above ₹1000
+  const shipping = 0; // Simple free shipping, no extra delivery charges
   const tax = cartItems.reduce((sum, item) => {
     const gst = parseFloat(item.GST_SS) || 0;
     return sum + (gst * item.Quantity);
@@ -267,38 +263,6 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="state">State *</Label>
-                    <Select onValueChange={(value) => handleInputChange("state", value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="california">California</SelectItem>
-                        <SelectItem value="texas">Texas</SelectItem>
-                        <SelectItem value="florida">Florida</SelectItem>
-                        <SelectItem value="newyork">New York</SelectItem>
-                        <SelectItem value="illinois">Illinois</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="country">Country *</Label>
-                    <Select onValueChange={(value) => handleInputChange("country", value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="us">United States</SelectItem>
-                        <SelectItem value="canada">Canada</SelectItem>
-                        <SelectItem value="uk">United Kingdom</SelectItem>
-                        <SelectItem value="australia">Australia</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 <div>
                   <Label htmlFor="zipCode">ZIP/Postal Code *</Label>
                   <Input
@@ -311,131 +275,18 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
 
-            {/* Payment Method */}
+            {/* Payment Method - simplified to Cash on Delivery only */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payment Method
+                  Cash on Delivery
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                    <RadioGroupItem value="card" id="card" />
-                    <Label htmlFor="card" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <CreditCard className="h-5 w-5" />
-                        <span>Credit/Debit Card</span>
-                      </div>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                    <RadioGroupItem value="paypal" id="paypal" />
-                    <Label htmlFor="paypal" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 bg-blue-600 rounded"></div>
-                        <span>PayPal</span>
-                      </div>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                    <RadioGroupItem value="apple" id="apple" />
-                    <Label htmlFor="apple" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 bg-black rounded"></div>
-                        <span>Apple Pay</span>
-                      </div>
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                    <RadioGroupItem value="google" id="google" />
-                    <Label htmlFor="google" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 bg-red-500 rounded"></div>
-                        <span>Google Pay</span>
-                      </div>
-                    </Label>
-                  </div>
-                </RadioGroup>
-
-                {paymentMethod === "card" && (
-                  <div className="mt-6 space-y-4">
-                    <div>
-                      <Label htmlFor="cardNumber">Card Number *</Label>
-                      <Input id="cardNumber" placeholder="1234 5678 9012 3456" required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="expiry">Expiry Date *</Label>
-                        <Input id="expiry" placeholder="MM/YY" required />
-                      </div>
-                      <div>
-                        <Label htmlFor="cvv">CVV *</Label>
-                        <Input id="cvv" placeholder="123" required />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="cardName">Name on Card *</Label>
-                      <Input id="cardName" required />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Delivery Options */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Truck className="h-5 w-5" />
-                  Delivery Options
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup defaultValue="standard">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="standard" id="standard" />
-                      <Label htmlFor="standard" className="cursor-pointer">
-                        <div>
-                          <div className="font-medium">Standard Delivery</div>
-                          <div className="text-sm text-muted-foreground">5-7 business days</div>
-                        </div>
-                      </Label>
-                    </div>
-                    <span className="font-medium">₹{shipping.toFixed(2)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="express" id="express" />
-                      <Label htmlFor="express" className="cursor-pointer">
-                        <div>
-                          <div className="font-medium">Express Delivery</div>
-                          <div className="text-sm text-muted-foreground">2-3 business days</div>
-                        </div>
-                      </Label>
-                    </div>
-                    <span className="font-medium">₹{(shipping + 100).toFixed(2)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="overnight" id="overnight" />
-                      <Label htmlFor="overnight" className="cursor-pointer">
-                        <div>
-                          <div className="font-medium">Overnight Delivery</div>
-                          <div className="text-sm text-muted-foreground">Next business day</div>
-                        </div>
-                      </Label>
-                    </div>
-                    <span className="font-medium">₹{(shipping + 200).toFixed(2)}</span>
-                  </div>
-                </RadioGroup>
+                <p className="text-sm text-muted-foreground">
+                  Payments are accepted only via <span className="font-semibold">Cash on Delivery (COD)</span>. 
+                  You will pay the total amount in cash when your order is delivered.
+                </p>
               </CardContent>
             </Card>
           </div>

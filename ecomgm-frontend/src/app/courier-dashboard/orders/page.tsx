@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
 interface Order {
-  PuchaseId: number;
+  PurchaseId: number;
   ProductId: number;
   Product: string;
   Description: string;
   ProductPrice: number;
   CustomerId: number;
+  CustomerName: string;
+  CustomerEmail: string;
+  CustomerMobile: string;
   OrderDate: string;
   OrderStatus: string;
   TotalAmount: number;
@@ -18,12 +21,16 @@ interface Order {
   PaymentMode: string;
   CourierId: number;
   VendorId: number;
-  ProductImage: string;
+  VendorName: string;
+  VendorMobile: string;
+  CanUpdateStatus: string;
 }
 
 export default function CourierOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingOrder, setProcessingOrder] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,88 +40,10 @@ export default function CourierOrders() {
       return;
     }
     
-    const fetchOrders = async () => {
-      try {
-        const validToken = getValidToken();
-        if (!validToken) {
-          performAutoLogout("/");
-          return;
-        }
-        
-        const response = await fetch("http://localhost:4000/courier/orders", {
-          headers: {
-            Authorization: `Bearer ${validToken.token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Ensure data.orders is an array before using it
-          setOrders(Array.isArray(data.orders) ? data.orders : []);
-        } else if (response.status === 401) {
-          performAutoLogout("/");
-        }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchOrders();
   }, [router]);
 
-  // Add this useEffect to setup timeout handlers for new orders
-  useEffect(() => {
-    if (orders.length === 0) return;
-
-    // For each pending order, setup a timeout handler
-    const timeoutHandlers = orders
-      .filter(order => order.OrderStatus === "Pending")
-      .map(order => {
-        const timeoutId = setTimeout(async () => {
-          try {
-            const validToken = getValidToken();
-            if (!validToken) {
-              performAutoLogout("/");
-              return;
-            }
-            
-            // Call backend to handle timeout and find next courier
-            const response = await fetch(`http://localhost:4000/courier/order/${order.PuchaseId}/timeout`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${validToken.token}`,
-              },
-            });
-
-            if (response.ok) {
-              // Remove timed-out order from view
-              setOrders(orders.filter(o => o.PuchaseId !== order.PuchaseId));
-            }
-          } catch (error) {
-            console.error("Error handling order timeout:", error);
-          }
-        }, 30 * 60 * 1000); // 30-minute timeout
-        
-        return {
-          orderId: order.PuchaseId,
-          timeoutId
-        };
-      });
-
-    // Cleanup function to clear timeouts
-    return () => {
-      timeoutHandlers.forEach(handler => {
-        if (handler.timeoutId) {
-          clearTimeout(handler.timeoutId);
-        }
-      });
-    };
-  }, [orders]);
-
-  const handleAcceptOrder = async (orderId: number) => {
+  const fetchOrders = async () => {
     try {
       const validToken = getValidToken();
       if (!validToken) {
@@ -122,25 +51,57 @@ export default function CourierOrders() {
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/courier/order/${orderId}/status`, {
+      const response = await fetch("http://localhost:4000/courier/orders", {
+        headers: {
+          Authorization: `Bearer ${validToken.token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Ensure data.orders is an array before using it
+        setOrders(Array.isArray(data.orders) ? data.orders : []);
+      } else if (response.status === 401) {
+        performAutoLogout("/");
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setError("Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptOrder = async (orderId: number) => {
+    try {
+      setProcessingOrder(orderId);
+      const validToken = getValidToken();
+      if (!validToken) {
+        performAutoLogout("/");
+        return;
+      }
+      
+      const response = await fetch(`http://localhost:4000/courier/order/${orderId}/accept`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${validToken.token}`,
         },
-        body: JSON.stringify({ status: "Shipped" }),
+        body: JSON.stringify({ accept: true }),
       });
       
       if (response.ok) {
-        // Update order status in state
-        setOrders(orders.map(order => 
-          order.PuchaseId === orderId 
-            ? { ...order, OrderStatus: "Shipped" } 
-            : order
-        ));
+        alert("Order accepted successfully!");
+        fetchOrders(); // Refresh orders
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to accept order");
       }
     } catch (error) {
       console.error("Error accepting order:", error);
+      alert("Failed to accept order");
+    } finally {
+      setProcessingOrder(null);
     }
   };
 
@@ -150,34 +111,66 @@ export default function CourierOrders() {
     }
     
     try {
+      setProcessingOrder(orderId);
       const validToken = getValidToken();
       if (!validToken) {
         performAutoLogout("/");
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/courier/order/${orderId}/status`, {
+      const response = await fetch(`http://localhost:4000/courier/order/${orderId}/accept`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${validToken.token}`,
         },
-        body: JSON.stringify({ status: "Pending" }),
+        body: JSON.stringify({ accept: false }),
       });
       
       if (response.ok) {
-        // Remove rejected order from view
-        setOrders(orders.filter(order => order.PuchaseId !== orderId));
+        alert("Order rejected successfully!");
+        fetchOrders(); // Refresh orders
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to reject order");
       }
     } catch (error) {
       console.error("Error rejecting order:", error);
+      alert("Failed to reject order");
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "Delivered":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Delivered</span>;
+      case "Out for Delivery":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Out for Delivery</span>;
+      case "Dispatched":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">Dispatched</span>;
+      case "Accepted":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Accepted</span>;
+      case "Pending":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending Acceptance</span>;
+      case "Ready for Pickup":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ready for Pickup</span>;
+      default:
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">{status}</span>;
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading orders...</div>
+        <div className="flex items-center">
+          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-xl">Loading orders...</span>
+        </div>
       </div>
     );
   }
@@ -212,8 +205,20 @@ export default function CourierOrders() {
                 Orders for Acceptance
               </h3>
               
+              {error && (
+                <div className="mb-4 p-4 bg-red-50 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
+              
               {Array.isArray(orders) && orders.length === 0 ? (
-                <p className="text-sm text-gray-500">No orders available for acceptance.</p>
+                <div className="text-center py-12">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002-2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No orders available for acceptance</h3>
+                  <p className="mt-1 text-sm text-gray-500">You don't have any orders assigned to you at the moment.</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -232,13 +237,16 @@ export default function CourierOrders() {
                           Customer
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Vendor
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Order Date
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Total Amount
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Payment Status
+                          Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
@@ -247,26 +255,13 @@ export default function CourierOrders() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {Array.isArray(orders) && orders.map((order) => (
-                        <tr key={order.PuchaseId}>
+                        <tr key={order.PurchaseId}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            #{order.PuchaseId}
+                            #{order.PurchaseId}
                           </td>
                           
-                          {/* Add product image and details */}
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="h-12 w-12 flex-shrink-0">
-                                <img
-                                  src={order.ProductImage || "/images/placeholder-product.jpg"}
-                                  alt={order.Product}
-                                  className="h-12 w-12 object-cover rounded"
-                                />
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">{order.Product}</div>
-                                <div className="text-sm text-gray-500">{order.Description}</div>
-                              </div>
-                            </div>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {order.Product}
                           </td>
                           
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -274,55 +269,49 @@ export default function CourierOrders() {
                           </td>
                           
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            Customer {order.CustomerId}
+                            <div>{order.CustomerName}</div>
+                            <div className="text-xs text-gray-400">{order.CustomerMobile}</div>
                           </td>
+                          
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div>{order.VendorName}</div>
+                            <div className="text-xs text-gray-400">{order.VendorMobile}</div>
+                          </td>
+                          
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {new Date(order.OrderDate).toLocaleDateString()}
                           </td>
+                          
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ₹{Number(order.TotalAmount).toFixed(2)}
                           </td>
+                          
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                ${order.PaymentStatus === 'Completed' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-yellow-100 text-yellow-800'}`}
-                            >
-                              {order.PaymentStatus}
-                            </span>
+                            {getStatusBadge(order.OrderStatus)}
                           </td>
                           
-                          {/* Add time remaining indicator for pending orders */}
-                          {order.OrderStatus === "Pending" && (
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-500">
-                              {getTimeRemaining(order.OrderDate)}
-                              </div>
-                            </td>
-                          )}
-                          
-                          {/* Update the Actions column to show more details in buttons */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex space-x-2">
                               {order.OrderStatus === "Pending" && (
                                 <>
                                   <button
-                                    onClick={() => handleAcceptOrder(order.PuchaseId)}
-                                    className="text-green-600 hover:text-green-900"
+                                    onClick={() => handleAcceptOrder(order.PurchaseId)}
+                                    disabled={processingOrder === order.PurchaseId}
+                                    className="text-green-600 hover:text-green-900 disabled:opacity-50"
                                   >
-                                    Accept
+                                    {processingOrder === order.PurchaseId ? "Accepting..." : "Accept"}
                                   </button>
                                   <button
-                                    onClick={() => handleRejectOrder(order.PuchaseId)}
-                                    className="text-red-600 hover:text-red-900"
+                                    onClick={() => handleRejectOrder(order.PurchaseId)}
+                                    disabled={processingOrder === order.PurchaseId}
+                                    className="text-red-600 hover:text-red-900 disabled:opacity-50"
                                   >
-                                    Reject
+                                    {processingOrder === order.PurchaseId ? "Rejecting..." : "Reject"}
                                   </button>
                                 </>
                               )}
                               <button
-                                onClick={() => router.push(`/courier/order/${order.PuchaseId}`)}
+                                onClick={() => router.push(`/courier-dashboard/orders/${order.PurchaseId}/details`)}
                                 className="text-blue-600 hover:text-blue-900"
                               >
                                 View Details
@@ -341,19 +330,4 @@ export default function CourierOrders() {
       </div>
     </div>
   );
-}
-
-// Add helper function for time remaining calculation
-function getTimeRemaining(timestamp: string): string {
-  if (!timestamp) return "";
-  
-  const now = new Date();
-  const orderTime = new Date(timestamp);
-  const diffMs = 30 * 60 * 1000 - (now.getTime() - orderTime.getTime());
-  
-  if (diffMs <= 0) return "Time expired";
-  
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffSecs = Math.floor((diffMs % 60000) / 1000);
-  return `${diffMins}m ${diffSecs}s remaining`;
 }

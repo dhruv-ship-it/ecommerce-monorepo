@@ -88,7 +88,13 @@ export default function VendorDashboard() {
   if (!mounted || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+        <div className="flex items-center">
+          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-xl">Loading dashboard...</span>
+        </div>
       </div>
     );
   }
@@ -132,29 +138,51 @@ export default function VendorDashboard() {
                 Vendor Dashboard
               </h3>
               
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <h4 className="text-sm font-medium text-blue-800">Pending Orders</h4>
+                  <p className="text-2xl font-bold text-blue-900">0</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                  <h4 className="text-sm font-medium text-green-800">Processing</h4>
+                  <p className="text-2xl font-bold text-green-900">0</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                  <h4 className="text-sm font-medium text-purple-800">Completed Today</h4>
+                  <p className="text-2xl font-bold text-purple-900">0</p>
+                </div>
+              </div>
+              
               <div className="mt-8">
-                <h4 className="text-md font-medium text-gray-900 mb-4">Quick Actions</h4>
+                <h4 className="text-md font-medium text-gray-900 mb-4">Management</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <button 
-                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left flex items-center"
                     onClick={() => router.push('/vendor-dashboard/products')}
                   >
-                    <h5 className="font-medium text-gray-900">Manage Products</h5>
-                    <p className="text-sm text-gray-500">Add, edit, or remove products</p>
+                    <div className="mr-3">
+                      <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="font-medium text-gray-900">Manage Products</h5>
+                      <p className="text-sm text-gray-500">Add, edit, or remove products</p>
+                    </div>
                   </button>
                   <button 
-                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left flex items-center"
                     onClick={() => router.push('/vendor-dashboard/orders')}
                   >
-                    <h5 className="font-medium text-gray-900">View Orders</h5>
-                    <p className="text-sm text-gray-500">Track order status and fulfillment</p>
-                  </button>
-                  <button 
-                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
-                    onClick={() => router.push('/vendor-dashboard/analytics')}
-                  >
-                    <h5 className="font-medium text-gray-900">Analytics</h5>
-                    <p className="text-sm text-gray-500">View sales and performance data</p>
+                    <div className="mr-3">
+                      <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="font-medium text-gray-900">View Orders</h5>
+                      <p className="text-sm text-gray-500">Track order status and fulfillment</p>
+                    </div>
                   </button>
                 </div>
               </div>

@@ -1,0 +1,25 @@
+CREATE EVENT archive_old_orders
+    -> ON SCHEDULE
+    ->     EVERY 1 DAY
+    ->     STARTS CURRENT_DATE + INTERVAL 2 HOUR
+    -> DO
+    -> BEGIN
+    ->     -- Step 1: Archive purchase records
+    ->     INSERT INTO purchase_arch
+    ->     SELECT *
+    ->     FROM purchase
+    ->     WHERE OrderDate < NOW() - INTERVAL 7 DAY;
+    ->
+    ->     -- Step 2: Archive courier records
+    ->     INSERT INTO vendorproductcustomercourier_arch
+    ->     SELECT *
+    ->     FROM vendorproductcustomercourier
+    ->     WHERE OrderCreationTimeStamp < NOW() - INTERVAL 7 DAY;
+    ->
+    ->     -- Step 3: Delete from live tables (child first)
+    ->     DELETE FROM vendorproductcustomercourier
+    ->     WHERE OrderCreationTimeStamp < NOW() - INTERVAL 7 DAY;
+    ->
+    ->     DELETE FROM purchase
+    ->     WHERE OrderDate < NOW() - INTERVAL 7 DAY;
+    -> END$$

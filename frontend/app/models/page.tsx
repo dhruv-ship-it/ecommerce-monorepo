@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Grid3X3, List, ShoppingCart } from "lucide-react"
+import { Grid3X3, List, ShoppingCart, Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -56,11 +56,13 @@ export default function ModelsPage() {
   
   const [filters, setFilters] = useState({
     category: categoryId || '',
-    sortBy: 'newest'
+    sortBy: 'newest',
+    search: ''
   })
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [loading, setLoading] = useState(true)
+  const [searchInput, setSearchInput] = useState('')
 
   useEffect(() => {
     fetchModels()
@@ -82,6 +84,17 @@ export default function ModelsPage() {
   useEffect(() => {
     applyFilters()
   }, [models, filters])
+
+  // Handle search input changes
+  useEffect(() => {
+    // When a space is detected in the search input, trigger the fuzzy search
+    if (searchInput.includes(' ')) {
+      handleFuzzySearch(searchInput);
+    } else if (searchInput.trim() === '') {
+      // If search is cleared, reset to all models
+      setFilters(prev => ({ ...prev, search: '' }));
+    }
+  }, [searchInput]);
 
   async function fetchModels() {
     try {
@@ -114,6 +127,36 @@ export default function ModelsPage() {
     }
   }
 
+  async function handleFuzzySearch(query: string) {
+    if (!query.trim()) {
+      setFilters(prev => ({ ...prev, search: '' }));
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('Searching models for:', query);
+      
+      const response = await fetch(`${API}/models/search/${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      console.log('Search API Response:', data);
+      
+      if (response.ok) {
+        setModels(data.models || []);
+        setFilters(prev => ({ ...prev, search: query }));
+      } else {
+        console.error('Failed to search models:', data.error);
+        setModels([]);
+      }
+    } catch (error) {
+      console.error('Error searching models:', error);
+      setModels([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function fetchFilterOptions() {
     try {
       const categoriesRes = await fetch(`${API}/products/categories/all`)
@@ -137,6 +180,15 @@ export default function ModelsPage() {
       )
     }
 
+    // Search filter - only apply if we have a search term
+    if (filters.search && filters.search.trim() !== '') {
+      const searchTerms = filters.search.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+      filtered = filtered.filter(model => {
+        const modelName = model.Model.toLowerCase();
+        return searchTerms.every(term => modelName.includes(term));
+      });
+    }
+
     // Sort
     switch (filters.sortBy) {
       case 'price-low':
@@ -158,8 +210,10 @@ export default function ModelsPage() {
   const resetFilters = () => {
     setFilters({
       category: 'all',
-      sortBy: 'newest'
+      sortBy: 'newest',
+      search: ''
     })
+    setSearchInput('');
   }
 
   if (loading) {
@@ -184,6 +238,18 @@ export default function ModelsPage() {
         </div>
         
         <div className="flex items-center gap-4 mt-4 md:mt-0">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Search models..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-10 pr-4 py-2 border rounded-lg w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
           {/* Sort */}
           <Select value={filters.sortBy} onValueChange={(value) => setFilters({ ...filters, sortBy: value })}>
             <SelectTrigger className="w-48">
@@ -269,8 +335,8 @@ export default function ModelsPage() {
                 
                 {/* Available Colors & Sizes */}
                 <div className="mb-3">
-                  <div className="text-xs text-gray-500 mb-1">Colors: {model.availableColors.slice(0, 3).join(', ')}{model.availableColors.length > 3 ? '...' : ''}</div>
-                  <div className="text-xs text-gray-500">Sizes: {model.availableSizes.slice(0, 3).join(', ')}{model.availableSizes.length > 3 ? '...' : ''}</div>
+                  <div className="text-xs text-gray-500 mb-1">Colors: {model.availableColors?.slice(0, 3).join(', ')}{model.availableColors && model.availableColors.length > 3 ? '...' : ''}</div>
+                  <div className="text-xs text-gray-500">Sizes: {model.availableSizes?.slice(0, 3).join(', ')}{model.availableSizes && model.availableSizes.length > 3 ? '...' : ''}</div>
                 </div>
                 
                 <div className="flex items-center justify-between">
@@ -320,8 +386,8 @@ export default function ModelsPage() {
                         </Link>
                         <p className="text-sm text-gray-600">{model.BrandName} - {model.MaterialName}</p>
                         <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                          <span>Colors: {model.availableColors.join(', ')}</span>
-                          <span>Sizes: {model.availableSizes.join(', ')}</span>
+                          <span>Colors: {model.availableColors?.join(', ') || 'None'}</span>
+                          <span>Sizes: {model.availableSizes?.join(', ') || 'None'}</span>
                         </div>
                         <div className="flex gap-2 mt-2">
                           {model.IsWaterResistant === 'Y' && <Badge variant="secondary" className="text-xs">Waterproof</Badge>}

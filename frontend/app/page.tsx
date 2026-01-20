@@ -9,11 +9,11 @@ export default function HomePage() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center max-w-4xl mx-auto">
           <h1 className="text-6xl font-bold text-gray-900 mb-6">
-            Welcome to <span className="text-blue-600">FootStyle</span>
+            Welcome to <span className="text-blue-600">Onlinekart</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            Discover the perfect footwear for every occasion. From athletic performance 
-            to everyday comfort, find your ideal pair from top global brands.
+            Discover the perfect products for every occasion. From electronics to fashion, 
+            home essentials to gadgets, find everything you need from top global brands.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

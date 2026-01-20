@@ -24,7 +24,7 @@ function suOnlyMiddleware(req, res, next) {
 
 // Create a new user (admin, vendor, courier)
 router.post('/user', authMiddleware, suOnlyMiddleware, async (req, res) => {
-  const { name, gender, mobile, email, pin, dob, address, password, role } = req.body;
+  const { name, gender, mobile, email, pin, dob, address, password, role, isVerified = 'N', isActivated = 'N' } = req.body;
   if (!name || !gender || !mobile || !email || !pin || !dob || !address || !password || !role) return res.status(400).json({ error: 'Missing fields' });
   if (!['admin', 'vendor', 'courier'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
   try {
@@ -44,8 +44,8 @@ router.post('/user', authMiddleware, suOnlyMiddleware, async (req, res) => {
     // Insert all required fields, provide defaults for others
     await conn.query(
       `INSERT INTO User (User, Gender, UserMobile, UserEmail, PIN, DoB, Passwd, Address, IsAdmin, IsVendor, IsCourier, IsSU, Locality, UserRank, IsVerified, IsActivated, IsBlackListed, IsDead, RecordCreationLogin, LastUpdationLogin)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 0, 0, 'N', 'N', 'N', 'N', ?, ?)`,
-      [name, gender, mobile, email, pin, dob, hashed, address, isAdmin, isVendor, isCourier, email.substring(0, 10), email.substring(0, 10)]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 0, 0, ?, ?, 'N', 'N', ?, ?)`,
+      [name, gender, mobile, email, pin, dob, hashed, address, isAdmin, isVendor, isCourier, isVerified, isActivated, email.substring(0, 10), email.substring(0, 10)]
     );
     conn.release();
     res.json({ message: 'User created' });

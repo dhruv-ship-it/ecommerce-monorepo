@@ -15,6 +15,7 @@ import courierRouter from './routes/courier.js';
 import productRouter from './routes/product.js';
 import modelRouter from './routes/model.js';
 import customerRouter from './routes/customer.js';
+import archiveRouter from './routes/archive.js';
 
 dotenv.config();
 
@@ -146,6 +147,7 @@ app.use('/vendor', userTokenMiddleware, vendorRoleMiddleware, vendorRouter);
 app.use('/courier', userTokenMiddleware, courierRoleMiddleware, courierRouter);
 app.use('/products', productRouter);
 app.use('/models', modelRouter);
+app.use('/archive', suTokenMiddleware, archiveRouter);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
