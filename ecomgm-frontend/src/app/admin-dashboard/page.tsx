@@ -157,9 +157,12 @@ export default function AdminDashboard() {
                     <h5 className="font-medium text-gray-900">View Orders</h5>
                     <p className="text-sm text-gray-500">Monitor order status and tracking</p>
                   </button>
-                  <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left">
-                    <h5 className="font-medium text-gray-900">Manage Products</h5>
-                    <p className="text-sm text-gray-500">Add or edit products</p>
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/manage-tables')}
+                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left cursor-pointer"
+                  >
+                    <h5 className="font-medium text-gray-900">Manage Tables</h5>
+                    <p className="text-sm text-gray-500">Add or edit database tables</p>
                   </button>
                   <button 
                     onClick={() => router.push('/admin-dashboard/reports')}

@@ -309,3 +309,427 @@ MariaDB [ecomv1]> SHOW CREATE TABLE purchase_arch;
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci |
 +---------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 1 row in set (0.001 sec)
+
+
+
+---- recently added -----
+
+MariaDB [ecomv1]> show tables;
++-----------------------------------+
+| Tables_in_ecomv1                  |
++-----------------------------------+
+| brand                             |
+| color                             |
+| company                           |
+| continent                         |
+| country                           |
+| currency                          |
+| customer                          |
+| district                          |
+| feedback                          |
+| locality                          |
+| material                          |
+| model                             |
+| product                           |
+| product_images                    |
+| productcategory                   |
+| productsubcategory                |
+| purchase                          |
+| purchase_arch                     |
+| shape                             |
+| shoppingcart                      |
+| size                              |
+| state                             |
+| su                                |
+| unit                              |
+| user                              |
+| vendorproduct                     |
+| vendorproductcustomercourier      |
+| vendorproductcustomercourier_arch |
++-----------------------------------+
+28 rows in set (0.007 sec)
+
+MariaDB [ecomv1]> desc continent;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| ContinentId             | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Continent               | varchar(255) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.019 sec)
+
+MariaDB [ecomv1]> desc country;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| CountryId               | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Country                 | varchar(255) | NO   | UNI | NULL                |                               |
+| Continent               | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc state;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| StateId                 | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| State                   | varchar(255) | NO   | UNI | NULL                |                               |
+| Country                 | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc district;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| DistrictId              | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| District                | varchar(255) | NO   | UNI | NULL                |                               |
+| State                   | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc locality;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| LocalityId              | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Locality                | varchar(255) | NO   | UNI | NULL                |                               |
+| PIN                     | varchar(10)  | NO   |     | NULL                |                               |
+| IsCity                  | char(1)      | NO   |     |                     |                               |
+| IsTown                  | char(1)      | NO   |     |                     |                               |
+| IsVillage               | char(1)      | NO   |     |                     |                               |
+| District                | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+12 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc company;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| CompanyId               | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Company                 | varchar(50) | NO   | UNI |                     |                               |
+| CompanyAddress          | varchar(50) | NO   |     |                     |                               |
+| CompanyPIN              | varchar(10) | NO   |     |                     |                               |
+| Locality                | int(8)      | YES  |     | 0                   |                               |
+| CompanyURL              | varchar(50) | NO   |     |                     |                               |
+| CompanyContactNo        | varchar(50) | NO   |     |                     |                               |
+| CompanyContactPerson    | varchar(50) | NO   |     |                     |                               |
+| CompanyEmail            | varchar(50) | NO   |     |                     |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+14 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc brand;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| BrandId                 | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Brand                   | varchar(50) | NO   | UNI | NULL                |                               |
+| Company                 | int(8)      | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc model;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| ModelId                 | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Model                   | varchar(100) | NO   | UNI | NULL                |                               |
+| Brand                   | int(8)       | NO   |     | 0                   |                               |
+| Dimensions              | varchar(50)  | YES  |     |                     |                               |
+| Weight                  | varchar(50)  | YES  |     |                     |                               |
+| IsWaterResistant        | char(1)      | NO   |     |                     |                               |
+| IsFireProof             | char(1)      | NO   |     |                     |                               |
+| IsEcoFriendly           | char(1)      | NO   |     |                     |                               |
+| IsRecyclable            | char(1)      | NO   |     |                     |                               |
+| IsHazaordous            | char(1)      | NO   |     |                     |                               |
+| IsFlamable              | char(1)      | NO   |     |                     |                               |
+| Warranty                | varchar(50)  | NO   |     |                     |                               |
+| Guarantee               | varchar(50)  | NO   |     |                     |                               |
+| Material                | int(8)       | NO   |     | 0                   |                               |
+| SpecsJSON               | longtext     | YES  |     | NULL                |                               |
+| OtherSpecs              | text         | YES  |     | ' '                 |                               |
+| UserManual              | varchar(50)  | NO   |     |                     |                               |
+| TechnicalManual         | varchar(50)  | NO   |     |                     |                               |
+| ImageCount              | int(2)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+24 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc material;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| MaterialId              | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Material                | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc product ;
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type            | Null | Key | Default             | Extra                         |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| ProductId               | int(8) unsigned | NO   | PRI | NULL                | auto_increment                |
+| Product                 | varchar(50)     | NO   | UNI | NULL                |                               |
+| ProductCategory_Gen     | int(8)          | NO   |     | 0                   |                               |
+| ProductSubCategory      | int(8)          | NO   |     | 0                   |                               |
+| Model                   | int(8)          | NO   |     | 0                   |                               |
+| Quantity                | int(5)          | NO   |     | 0                   |                               |
+| Unit                    | int(8)          | NO   |     | 0                   |                               |
+| MRP                     | decimal(10,2)   | YES  |     | 0.00                |                               |
+| Currency                | int(8)          | NO   |     | 0                   |                               |
+| Color                   | int(8)          | NO   |     | 0                   |                               |
+| Size                    | int(8)          | NO   |     | 0                   |                               |
+| Shape                   | int(8)          | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)         | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime        | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)     | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime        | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)     | NO   |     |                     |                               |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+17 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc color;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| ColorId                 | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Color                   | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc shape;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| ShapeId                 | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Shape                   | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc size;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| SizeId                  | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Size                    | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.013 sec)
+
+MariaDB [ecomv1]> desc unit;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| UnitId                  | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Unit                    | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.015 sec)
+
+MariaDB [ecomv1]> desc currency;
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type        | Null | Key | Default             | Extra                         |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+| CurrencyId              | int(8)      | NO   | PRI | NULL                | auto_increment                |
+| Currency                | varchar(50) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)     | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime    | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10) | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime    | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10) | NO   |     |                     |                               |
++-------------------------+-------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc productcategory;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| ProductCategoryId       | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| ProductCategory         | varchar(100) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.014 sec)
+
+MariaDB [ecomv1]> desc productsubcategory;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| ProductSubCategoryId    | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| ProductSubCategory      | varchar(100) | NO   | UNI | NULL                |                               |
+| ProductCategory         | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.013 sec)
+
+MariaDB [ecomv1]> show create table product;
++---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Table   | Create Table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
++---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| product | CREATE TABLE `product` (
+  `ProductId` int(8) unsigned NOT NULL AUTO_INCREMENT,
+  `Product` varchar(50) NOT NULL,
+  `ProductCategory_Gen` int(8) NOT NULL DEFAULT 0,
+  `ProductSubCategory` int(8) NOT NULL DEFAULT 0,
+  `Model` int(8) NOT NULL DEFAULT 0,
+  `Quantity` int(5) NOT NULL DEFAULT 0,
+  `Unit` int(8) NOT NULL DEFAULT 0,
+  `MRP` decimal(10,2) DEFAULT 0.00,
+  `Currency` int(8) NOT NULL DEFAULT 0,
+  `Color` int(8) NOT NULL DEFAULT 0,
+  `Size` int(8) NOT NULL DEFAULT 0,
+  `Shape` int(8) NOT NULL DEFAULT 0,
+  `IsDeleted` char(1) NOT NULL DEFAULT '',
+  `RecordCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `RecordCreationLogin` varchar(10) NOT NULL DEFAULT '',
+  `LastUpdationTimeStamp` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `LastUpdationLogin` varchar(10) NOT NULL DEFAULT '',
+  PRIMARY KEY (`ProductId`),
+  UNIQUE KEY `Product` (`Product`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci |
++---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.002 sec)
+
+MariaDB [ecomv1]> SELECT
+    ->     TABLE_NAME,
+    ->     COLUMN_NAME,
+    ->     CONSTRAINT_NAME,
+    ->     REFERENCED_TABLE_NAME,
+    ->     REFERENCED_COLUMN_NAME
+    -> FROM information_schema.KEY_COLUMN_USAGE
+    -> WHERE TABLE_SCHEMA = 'ecomv1'
+    ->   AND TABLE_NAME = 'product'
+    ->   AND REFERENCED_TABLE_NAME IS NOT NULL;
+Empty set (0.004 sec)
+
+MariaDB [ecomv1]> show create table country;
++---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Table   | Create Table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
++---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| country | CREATE TABLE `country` (
+  `CountryId` int(8) NOT NULL AUTO_INCREMENT,
+  `Country` varchar(255) NOT NULL,
+  `Continent` int(8) NOT NULL DEFAULT 0,
+  `IsDeleted` char(1) NOT NULL DEFAULT '',
+  `RecordCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `RecordCreationLogin` varchar(10) NOT NULL DEFAULT '',
+  `LastUpdationTimeStamp` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `LastUpdationLogin` varchar(10) NOT NULL DEFAULT '',
+  PRIMARY KEY (`CountryId`),
+  UNIQUE KEY `Country` (`Country`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci |
++---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.000 sec)
+
+MariaDB [ecomv1]> show create table vendorproductcustomercourier;
++------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Table                        | Create Table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
++------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| vendorproductcustomercourier | CREATE TABLE `vendorproductcustomercourier` (
+  `VendorProductCustomerCourierId` int(8) unsigned NOT NULL AUTO_INCREMENT,
+  `PurchaseId` int(8) NOT NULL,
+  `Customer` int(8) NOT NULL DEFAULT 0,
+  `Product` int(8) NOT NULL DEFAULT 0,
+  `MRP_SS` decimal(10,2) DEFAULT 0.00,
+  `Discount_SS` decimal(10,2) DEFAULT 0.00,
+  `GST_SS` decimal(10,2) DEFAULT 0.00,
+  `PurchaseQty` int(10) DEFAULT 0,
+  `Vendor` int(8) NOT NULL DEFAULT 0,
+  `OrderCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `IsReady_for_Pickup_by_Courier` char(1) NOT NULL DEFAULT '',
+  `Ready_for_Pickup_by_CourierTimeStamp` datetime DEFAULT NULL,
+  `Courier` int(8) NOT NULL DEFAULT 0,
+  `TrackingNo` varchar(20) NOT NULL DEFAULT ' ',
+  `IsPicked_by_Courier` char(1) NOT NULL DEFAULT '',
+  `Picked_by_CourierTimeStamp` datetime DEFAULT NULL,
+  `IsDispatched` char(1) NOT NULL DEFAULT '',
+  `DispatchedTimeStamp` datetime DEFAULT NULL,
+  `IsOut_for_Delivery` char(1) NOT NULL DEFAULT '',
+  `Out_for_DeliveryTimeStamp` datetime DEFAULT NULL,
+  `IsDelivered` char(1) NOT NULL DEFAULT '',
+  `DeliveryTimeStamp` datetime DEFAULT NULL,
+  `IsPartialDelivery` char(1) NOT NULL DEFAULT '',
+  `IsReturned` char(1) NOT NULL DEFAULT '',
+  `ReturnTimeStamp` datetime DEFAULT NULL,
+  `IsDeleted` char(1) NOT NULL DEFAULT '',
+  `RecordCreationTimeStamp` datetime NOT NULL DEFAULT current_timestamp(),
+  `RecordCreationLogin` varchar(10) NOT NULL DEFAULT '',
+  `LastUpdationTimeStamp` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `LastUpdationLogin` varchar(10) NOT NULL DEFAULT '',
+  PRIMARY KEY (`VendorProductCustomerCourierId`),
+  KEY `fk_vpcc_purchase` (`PurchaseId`),
+  CONSTRAINT `fk_vpcc_purchase` FOREIGN KEY (`PurchaseId`) REFERENCES `purchase` (`PuchaseId`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci |
++------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.002 sec)
+
+MariaDB [ecomv1]>
