@@ -280,13 +280,19 @@ export default function SUDashboard() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomGM - SU Dashboard
+                EcomMGM - SU Dashboard
               </h1>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => router.push('/su-dashboard/profile')}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+              >
+                Profile
+              </button>
               <button
                 onClick={handleLogout}
-                className="ml-4 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
               >
                 Logout
               </button>
@@ -301,8 +307,8 @@ export default function SUDashboard() {
           {/* Create User Form */}
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Create User (Admin, Vendor, Courier)
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4 text-blue-600">
+                <span className="text-blue-600 font-bold">Create User (Admin, Vendor, Courier)</span>
               </h3>
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -441,8 +447,8 @@ export default function SUDashboard() {
             {/* Users Section */}
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  All Users
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4 text-blue-600">
+                  <span className="text-blue-600 font-bold">All Users</span>
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -559,8 +565,8 @@ export default function SUDashboard() {
             {/* Customers Section */}
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  All Customers
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4 text-blue-600">
+                  <span className="text-blue-600 font-bold">All Customers</span>
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">

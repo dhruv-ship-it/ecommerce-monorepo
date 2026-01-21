@@ -17,6 +17,7 @@ export default function VendorDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+
   const router = useRouter();
 
   // Prevent hydration mismatch
@@ -40,19 +41,22 @@ export default function VendorDashboard() {
     }
     
     try {
-      const response = await fetch("http://localhost:4000/api/user/profile", {
+      // Fetch user profile
+      const profileResponse = await fetch("http://localhost:4000/api/user/profile", {
         headers: {
           Authorization: `Bearer ${validToken.token}`,
         },
       });
-      const data = await response.json();
-      if (response.ok) {
-        setUser(data);
-      } else if (response.status === 401) {
+      const profileData = await profileResponse.json();
+      if (profileResponse.ok) {
+        setUser(profileData);
+      } else if (profileResponse.status === 401) {
         // Token expired or invalid
         performAutoLogout("/");
         return;
       }
+      
+
     } catch (error) {
       console.error("Error fetching user profile:", error);
     } finally {
@@ -106,19 +110,19 @@ export default function VendorDashboard() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomGM - Vendor Dashboard
+                EcomMGM - Vendor Dashboard
               </h1>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-700">
+                Welcome, {user?.User || "Vendor"}
+              </span>
               <button
                 onClick={() => router.push('/vendor-dashboard/profile')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 mr-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
               >
                 Profile
               </button>
-              <span className="text-sm text-gray-700 mr-4">
-                Welcome, {user?.User || "Vendor"}
-              </span>
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
@@ -135,53 +139,40 @@ export default function VendorDashboard() {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Vendor Dashboard
+                <span className="text-blue-600 font-bold">Vendor Dashboard</span>
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                  <h4 className="text-sm font-medium text-blue-800">Pending Orders</h4>
-                  <p className="text-2xl font-bold text-blue-900">0</p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                  <h4 className="text-sm font-medium text-green-800">Processing</h4>
-                  <p className="text-2xl font-bold text-green-900">0</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
-                  <h4 className="text-sm font-medium text-purple-800">Completed Today</h4>
-                  <p className="text-2xl font-bold text-purple-900">0</p>
-                </div>
-              </div>
+
               
               <div className="mt-8">
-                <h4 className="text-md font-medium text-gray-900 mb-4">Management</h4>
+                <h4 className="text-md font-medium text-gray-900 mb-4 text-blue-600">Order Management</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <button 
-                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left flex items-center"
+                    className="p-4 border border-blue-300 rounded-lg hover:bg-blue-50 text-left flex items-center bg-blue-50"
                     onClick={() => router.push('/vendor-dashboard/products')}
                   >
                     <div className="mr-3">
-                      <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
                     </div>
                     <div>
-                      <h5 className="font-medium text-gray-900">Manage Products</h5>
-                      <p className="text-sm text-gray-500">Add, edit, or remove products</p>
+                      <h5 className="font-medium text-blue-900">Manage Products</h5>
+                      <p className="text-sm text-blue-700">Add, edit, or remove products</p>
                     </div>
                   </button>
                   <button 
-                    className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 text-left flex items-center"
+                    className="p-4 border border-blue-300 rounded-lg hover:bg-blue-50 text-left flex items-center bg-blue-50"
                     onClick={() => router.push('/vendor-dashboard/orders')}
                   >
                     <div className="mr-3">
-                      <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                     </div>
                     <div>
-                      <h5 className="font-medium text-gray-900">View Orders</h5>
-                      <p className="text-sm text-gray-500">Track order status and fulfillment</p>
+                      <h5 className="font-medium text-blue-900">View Orders</h5>
+                      <p className="text-sm text-blue-700">Track order status and fulfillment</p>
                     </div>
                   </button>
                 </div>

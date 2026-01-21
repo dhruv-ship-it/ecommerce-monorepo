@@ -20,6 +20,20 @@ interface ReferenceData {
   [key: string]: { id: number; name: string }[];
 }
 
+// Helper function to get display value for a field
+const getDisplayValue = (record: EntityRecord, field: string): string => {
+  // Check if there's a human-readable name version of this field
+  const nameField = `${field.replace(/Id$/, '')}_Name`;
+  
+  // If the name field exists and has a meaningful value, use it
+  if (nameField in record && record[nameField] && !record[nameField].startsWith('(ID:') && record[nameField] !== '(Not Set)') {
+    return record[nameField];
+  }
+  
+  // Otherwise, return the original value
+  return String(record[field]);
+};
+
 const EntityManagementPage = () => {
   const router = useRouter();
   const params = useParams<{ entity: string }>();
@@ -221,11 +235,8 @@ const EntityManagementPage = () => {
 
   const handleEdit = async (id: number) => {
     try {
-      const record = await fetchRecordById(id);
-      setEditingRecord(record);
-      setFormData({ ...record });
-      await fetchReferenceData(id);
-      setShowForm(true);
+      // Navigate to the edit page
+      router.push(`/admin-dashboard/manage-tables/${entity}/${id}`);
     } catch (err) {
       setError('Failed to load record for editing');
       console.error('Error loading record for edit:', err);
@@ -294,10 +305,8 @@ const EntityManagementPage = () => {
   };
 
   const handleAddNew = async () => {
-    setEditingRecord(null);
-    setFormData({});
-    await fetchReferenceData();
-    setShowForm(true);
+    // Navigate to the new entry page
+    router.push(`/admin-dashboard/manage-tables/${entity}/new`);
   };
 
   const handleFieldChange = (field: string, value: any) => {
@@ -334,12 +343,20 @@ const EntityManagementPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">
               Manage {getEntityDisplayName(entity)}
             </h1>
-            <button
-              onClick={handleAddNew}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
-            >
-              Add New
-            </button>
+            <div className="space-x-3">
+              <button
+                onClick={() => router.push(`/admin-dashboard/manage-tables/${entity}/deleted`)}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors"
+              >
+                View Deleted {getEntityDisplayName(entity)}
+              </button>
+              <button
+                onClick={handleAddNew}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+              >
+                Add New
+              </button>
+            </div>
           </div>
           
           {error && (
@@ -348,87 +365,7 @@ const EntityManagementPage = () => {
             </div>
           )}
           
-          {showForm ? (
-            <div className="mb-8 p-6 border border-gray-200 rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">
-                {editingRecord ? 'Edit' : 'Add New'} {getEntityDisplayName(entity)}
-              </h2>
-              
-              <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-                {/* Dynamically render form fields based on entity */}
-                {Object.keys(formData).map((field) => {
-                  if (field === getPrimaryKeyField(entity) || 
-                      field === 'RecordCreationTimeStamp' || 
-                      field === 'RecordCreationLogin' || 
-                      field === 'LastUpdationTimeStamp' || 
-                      field === 'LastUpdationLogin' || 
-                      field === 'IsDeleted') {
-                    return null; // Skip primary key and audit fields
-                  }
 
-                  const referenceField = getReferenceFields(entity)[field];
-                  
-                  return (
-                    <div key={field} className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {field.replace(/([A-Z])/g, ' $1').trim()}:
-                      </label>
-                      
-                      {referenceField && referenceData[referenceField] ? (
-                        <select
-                          value={formData[field] || ''}
-                          onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
-                        >
-                          <option value="">Select {referenceField}</option>
-                          {referenceData[referenceField].map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={field.toLowerCase().includes('date') ? 'date' : 
-                                field.toLowerCase().includes('timestamp') ? 'datetime-local' :
-                                field.toLowerCase().includes('email') ? 'email' :
-                                field.toLowerCase().includes('mobile') || field.toLowerCase().includes('phone') ? 'tel' :
-                                field.toLowerCase().includes('password') ? 'password' :
-                                field.toLowerCase().includes('url') ? 'url' :
-                                field.toLowerCase().includes('price') || field.toLowerCase().includes('amount') || field.toLowerCase().includes('mrp') || field.toLowerCase().includes('gst') || field.toLowerCase().includes('discount') ? 'number' :
-                                'text'}
-                          value={formData[field] || ''}
-                          onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
-                          placeholder={`Enter ${field.replace(/([A-Z])/g, ' $1').trim()}`}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-                
-                <div className="flex space-x-4 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingRecord(null);
-                      setFormData({});
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    {editingRecord ? 'Update' : 'Create'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : null}
           
           <div className="mb-6">
             <input
@@ -459,13 +396,30 @@ const EntityManagementPage = () => {
                           return null; // Skip audit fields in table
                         }
                         
+                        // Skip the generated _Name fields to avoid duplicates in headers
+                        if (field.endsWith('_Name')) {
+                          return null;
+                        }
+                        
+                        // Format the header text nicely
+                        let headerText = field.replace(/([A-Z])/g, ' $1').trim();
+                        
+                        // If this field has a corresponding _Name field, make the header clearer
+                        const nameField = `${field.replace(/Id$/, '')}_Name`;
+                        if (nameField in (records[0] || {})) {
+                          // If the field ends with Id, replace it with a clearer label
+                          if (field.endsWith('Id') && !['Id', 'UserId', 'CustomerId', 'VendorProductCustomerCourierId', 'PurchaseId'].includes(field)) {
+                            headerText = field.replace(/Id$/, '');
+                          }
+                        }
+                        
                         return (
                           <th 
                             key={field} 
                             scope="col" 
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
-                            {field.replace(/([A-Z])/g, ' $1').trim()}
+                            {headerText}
                           </th>
                         );
                       })}
@@ -486,9 +440,14 @@ const EntityManagementPage = () => {
                             return null; // Skip audit fields in table
                           }
                           
+                          // Skip the generated _Name fields to avoid duplicates
+                          if (field.endsWith('_Name')) {
+                            return null;
+                          }
+                          
                           return (
                             <td key={field} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {String(value)}
+                              {getDisplayValue(record, field)}
                             </td>
                           );
                         })}
@@ -560,3 +519,4 @@ const EntityManagementPage = () => {
 };
 
 export default EntityManagementPage;
+

@@ -1,255 +1,234 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { validateAuth, performAutoLogout } from "@/utils/auth";
 
-export default function LoginPage() {
-  const [adminCredentials, setAdminCredentials] = useState({ email: "", password: "" });
-  const [suCredentials, setSuCredentials] = useState({ email: "", password: "" });
-  const [vendorCredentials, setVendorCredentials] = useState({ email: "", password: "" });
-  const [courierCredentials, setCourierCredentials] = useState({ email: "", password: "" });
-  const [adminError, setAdminError] = useState("");
-  const [suError, setSuError] = useState("");
-  const [vendorError, setVendorError] = useState("");
-  const [courierError, setCourierError] = useState("");
+export default function UnifiedLoginPage() {
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [selectedRole, setSelectedRole] = useState<"vendor" | "courier" | "admin" | "su" | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError("");
-    try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: adminCredentials.email,
-          password: adminCredentials.password,
-          role: "admin"
-        }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem("admin_token", JSON.stringify(data));
+  // Check for existing session and redirect to appropriate dashboard
+  useEffect(() => {
+    setMounted(true);
+    
+    // Check for existing tokens and redirect accordingly
+    if (typeof window !== 'undefined') {
+      if (localStorage.getItem("admin_token")) {
         router.push("/admin-dashboard");
-      } else {
-        setAdminError(data.error || "Login failed");
+        return;
       }
-    } catch (error) {
-      setAdminError("Network error. Please try again.");
-    }
-  };
-
-  const handleSuLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSuError("");
-    try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: suCredentials.email,
-          password: suCredentials.password,
-          role: "su"
-        }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem("su_token", JSON.stringify(data));
-        router.push("/su-dashboard");
-      } else {
-        setSuError(data.error || "Login failed");
-      }
-    } catch (error) {
-      setSuError("Network error. Please try again.");
-    }
-  };
-
-  const handleVendorLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVendorError("");
-    try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: vendorCredentials.email,
-          password: vendorCredentials.password,
-          role: "vendor"
-        }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem("vendor_token", JSON.stringify(data));
+      if (localStorage.getItem("vendor_token")) {
         router.push("/vendor-dashboard");
+        return;
+      }
+      if (localStorage.getItem("courier_token")) {
+        router.push("/courier-dashboard");
+        return;
+      }
+      if (localStorage.getItem("su_token")) {
+        router.push("/su-dashboard");
+        return;
+      }
+    }
+  }, [router]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRole) {
+      setError("Please select a role to login");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Clear any existing tokens before login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("token"); // customer portal token
+        localStorage.removeItem("su_token");
+        localStorage.removeItem("admin_token");
+        localStorage.removeItem("vendor_token");
+        localStorage.removeItem("courier_token");
+      }
+
+      let response;
+      let endpoint;
+      let requestBody;
+
+      if (selectedRole === "su") {
+        // For SU login, the email field is actually the name
+        endpoint = `http://localhost:4000/api/auth/su-login`;
+        requestBody = {
+          email: credentials.email, // This will be the SU name
+          password: credentials.password,
+        };
       } else {
-        setVendorError(data.error || "Login failed");
+        // For admin, vendor, courier - use user-login endpoint
+        endpoint = `http://localhost:4000/api/auth/user-login`;
+        requestBody = {
+          email: credentials.email,
+          password: credentials.password,
+          role: selectedRole
+        };
+      }
+
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Store token based on login type
+        if (typeof window !== 'undefined') {
+          if (selectedRole === "admin") {
+            localStorage.setItem("admin_token", data.token);
+            router.push("/admin-dashboard");
+          } else if (selectedRole === "vendor") {
+            localStorage.setItem("vendor_token", data.token);
+            router.push("/vendor-dashboard");
+          } else if (selectedRole === "courier") {
+            localStorage.setItem("courier_token", data.token);
+            router.push("/courier-dashboard");
+          } else if (selectedRole === "su") {
+            localStorage.setItem("su_token", data.token);
+            router.push("/su-dashboard");
+          }
+        }
+      } else {
+        setError(data.message || "Login failed");
       }
     } catch (error) {
-      setVendorError("Network error. Please try again.");
+      console.error('Login error:', error);
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCourierLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCourierError("");
-    try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: courierCredentials.email,
-          password: courierCredentials.password,
-          role: "courier"
-        }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem("courier_token", JSON.stringify(data));
-        router.push("/courier-dashboard");
-      } else {
-        setCourierError(data.error || "Login failed");
-      }
-    } catch (error) {
-      setCourierError("Network error. Please try again.");
-    }
-  };
+  // Prevent hydration mismatch by only rendering after client mount
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
-        {/* Admin and SU Login Section (Top Right) */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Admin Login</h2>
-            <form onSubmit={handleAdminLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={adminCredentials.email}
-                  onChange={(e) => setAdminCredentials({...adminCredentials, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={adminCredentials.password}
-                  onChange={(e) => setAdminCredentials({...adminCredentials, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              {adminError && <div className="text-red-600 text-sm">{adminError}</div>}
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Login as Admin
-              </button>
-            </form>
+    <div className="min-h-screen bg-gray-50">
+      {/* Top Right Navigation - Admin and SU Login */}
+      <div className="absolute top-4 right-4 flex space-x-2">
+        <button
+          onClick={() => setSelectedRole(selectedRole === "admin" ? null : "admin")}
+          className={`px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            selectedRole === "admin"
+              ? "bg-blue-600 text-white focus:ring-blue-500"
+              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-gray-500"
+          }`}
+        >
+          Admin Login
+        </button>
+        <button
+          onClick={() => setSelectedRole(selectedRole === "su" ? null : "su")}
+          className={`px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+            selectedRole === "su"
+              ? "bg-purple-600 text-white focus:ring-purple-500"
+              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-gray-500"
+          }`}
+        >
+          SU Login
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex items-center justify-center min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">EcomMGM</h1>
+            <p className="mt-2 text-gray-600">Sign in to your account</p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Super User Login</h2>
-            <form onSubmit={handleSuLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={suCredentials.email}
-                  onChange={(e) => setSuCredentials({...suCredentials, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={suCredentials.password}
-                  onChange={(e) => setSuCredentials({...suCredentials, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              {suError && <div className="text-red-600 text-sm">{suError}</div>}
-              <button
-                type="submit"
-                className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-              >
-                Login as Super User
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Vendor and Courier Login Section (Center) */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Vendor Login</h2>
-            <form onSubmit={handleVendorLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={vendorCredentials.email}
-                  onChange={(e) => setVendorCredentials({...vendorCredentials, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={vendorCredentials.password}
-                  onChange={(e) => setVendorCredentials({...vendorCredentials, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              {vendorError && <div className="text-red-600 text-sm">{vendorError}</div>}
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                Login as Vendor
-              </button>
-            </form>
+          {/* Role Selection Cards - Center */}
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => setSelectedRole(selectedRole === "vendor" ? null : "vendor")}
+              className={`p-4 rounded-lg border-2 transition-colors ${
+                selectedRole === "vendor"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:border-blue-300"
+              }`}
+            >
+              <div className="font-medium">Vendor</div>
+            </button>
+            <button
+              onClick={() => setSelectedRole(selectedRole === "courier" ? null : "courier")}
+              className={`p-4 rounded-lg border-2 transition-colors ${
+                selectedRole === "courier"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:border-blue-300"
+              }`}
+            >
+              <div className="font-medium">Courier</div>
+            </button>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Courier Login</h2>
-            <form onSubmit={handleCourierLogin} className="space-y-4">
+          {/* Login Form */}
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  {selectedRole === "su" ? "Name" : "Email"}
+                </label>
                 <input
-                  type="email"
-                  value={courierCredentials.email}
-                  onChange={(e) => setCourierCredentials({...courierCredentials, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  id="email"
+                  name="email"
+                  type={selectedRole === "su" ? "text" : "email"}
                   required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  placeholder={selectedRole === "su" ? "Enter your name" : "Enter your email"}
+                  value={credentials.email}
+                  onChange={(e) =>
+                    setCredentials({ ...credentials, email: e.target.value })
+                  }
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
                 <input
+                  id="password"
+                  name="password"
                   type="password"
-                  value={courierCredentials.password}
-                  onChange={(e) => setCourierCredentials({...courierCredentials, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  placeholder="Enter your password"
+                  value={credentials.password}
+                  onChange={(e) =>
+                    setCredentials({ ...credentials, password: e.target.value })
+                  }
                 />
               </div>
-              {courierError && <div className="text-red-600 text-sm">{courierError}</div>}
+              {error && (
+                <div className="text-red-600 text-sm">{error}</div>
+              )}
               <button
                 type="submit"
-                className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                disabled={loading || !selectedRole}
+                className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Login as Courier
+                {loading ? "Signing in..." : selectedRole ? `Sign in as ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}` : "Select a Role"}
               </button>
             </form>
           </div>
