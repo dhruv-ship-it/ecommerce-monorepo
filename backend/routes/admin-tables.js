@@ -102,6 +102,41 @@ const getTableFields = (entity) => {
   return fieldMap[entity.toLowerCase()];
 };
 
+// Helper function to get table schema information
+async function getTableSchema(tableName, conn) {
+  try {
+    const schemaInfo = await conn.query(`
+      SELECT 
+        COLUMN_NAME as fieldName,
+        IS_NULLABLE as nullable,
+        COLUMN_DEFAULT as defaultValue,
+        DATA_TYPE as dataType,
+        COLUMN_KEY as columnKey,
+        EXTRA as extra
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = ? AND TABLE_SCHEMA = ?
+      ORDER BY ORDINAL_POSITION
+    `, [tableName, process.env.DB_NAME]);
+    
+    const schema = {};
+    schemaInfo.forEach(col => {
+      schema[col.fieldName] = {
+        nullable: col.nullable === 'YES',
+        defaultValue: col.defaultValue,
+        dataType: col.dataType,
+        columnKey: col.columnKey,
+        extra: col.extra,
+        isRequired: !(col.nullable === 'YES' || col.defaultValue !== null || col.extra === 'auto_increment')
+      };
+    });
+    
+    return schema;
+  } catch (error) {
+    console.error(`Error fetching schema for table ${tableName}:`, error);
+    return {};
+  }
+}
+
 // Get all records for a specific table with pagination
 router.get('/:entity', adminOnlyMiddleware, async (req, res) => {
   try {
@@ -141,9 +176,13 @@ router.get('/:entity', adminOnlyMiddleware, async (req, res) => {
       let query = `SELECT * FROM ${tableName} WHERE IsDeleted != 'Y' ORDER BY ${getTableFields(entity)[0]} DESC LIMIT ? OFFSET ?`;
       let records = await conn.query(query, [limit, offset]);
 
+      console.log(`Raw records fetched from ${tableName}:`, records.slice(0, 2)); // Log first 2 records
+      
       // Enhance records with reference names if entity has reference fields
       const enhancedRecords = await enhanceRecordsWithReferences(records, entity, conn);
 
+      console.log(`Enhanced records for ${tableName}:`, enhancedRecords.slice(0, 2)); // Log first 2 enhanced records
+      
       console.log(`Successfully fetched ${records.length} records from ${tableName}`);
       
       // Convert BigInt values to numbers for JSON serialization
@@ -190,15 +229,30 @@ async function enhanceRecordsWithReferences(records, entity, conn) {
     'product': [
       { field: 'ProductCategory_Gen', refTable: 'productcategory', refIdField: 'ProductCategoryId', refNameField: 'ProductCategory', displayName: 'Category' },
       { field: 'ProductSubCategory', refTable: 'productsubcategory', refIdField: 'ProductSubCategoryId', refNameField: 'ProductSubCategory', displayName: 'SubCategory' },
-      { field: 'Model', refTable: 'model', refIdField: 'ModelId', refNameField: 'Model', displayName: 'Model' },
+      { field: 'Model', refTable: 'model', refIdField: 'ModelId', refNameField: 'Model', displayName: 'Model', 
+        nestedRefs: [
+          { field: 'Brand', refTable: 'brand', refIdField: 'BrandId', refNameField: 'Brand', displayName: 'Brand',
+            nestedRefs: [
+              { field: 'Company', refTable: 'company', refIdField: 'CompanyId', refNameField: 'Company', displayName: 'Company' }
+            ]
+          }
+        ]
+      },
       { field: 'Unit', refTable: 'unit', refIdField: 'UnitId', refNameField: 'Unit', displayName: 'Unit' },
       { field: 'Currency', refTable: 'currency', refIdField: 'CurrencyId', refNameField: 'Currency', displayName: 'Currency' },
       { field: 'Color', refTable: 'color', refIdField: 'ColorId', refNameField: 'Color', displayName: 'Color' },
       { field: 'Size', refTable: 'size', refIdField: 'SizeId', refNameField: 'Size', displayName: 'Size' },
       { field: 'Shape', refTable: 'shape', refIdField: 'ShapeId', refNameField: 'Shape', displayName: 'Shape' }
     ],
+    'productsubcategory': [
+      { field: 'ProductCategory', refTable: 'productcategory', refIdField: 'ProductCategoryId', refNameField: 'ProductCategory', displayName: 'Category' }  // This maps productsubcategory.ProductCategory -> productcategory.ProductCategoryId
+    ],
     'model': [
-      { field: 'Brand', refTable: 'brand', refIdField: 'BrandId', refNameField: 'Brand', displayName: 'Brand' },
+      { field: 'Brand', refTable: 'brand', refIdField: 'BrandId', refNameField: 'Brand', displayName: 'Brand',
+        nestedRefs: [
+          { field: 'Company', refTable: 'company', refIdField: 'CompanyId', refNameField: 'Company', displayName: 'Company' }
+        ]
+      },
       { field: 'Material', refTable: 'material', refIdField: 'MaterialId', refNameField: 'Material', displayName: 'Material' }
     ],
     'brand': [
@@ -218,58 +272,126 @@ async function enhanceRecordsWithReferences(records, entity, conn) {
     ],
     'locality': [
       { field: 'District', refTable: 'district', refIdField: 'DistrictId', refNameField: 'District', displayName: 'District' }
-    ],
-    'productsubcategory': [
-      { field: 'ProductCategory_Gen', refTable: 'productcategory', refIdField: 'ProductCategoryId', refNameField: 'ProductCategory', displayName: 'Category' }
     ]
   };
 
   if (!referenceMappings[entity]) {
+    console.log(`No reference mappings found for entity: ${entity}`);
     return records; // No reference mappings for this entity
   }
 
   const mappings = referenceMappings[entity];
   const enhancedRecords = [];
 
+  console.log(`Processing ${records.length} records for entity ${entity} with ${mappings.length} reference mappings`);
+
   for (const record of records) {
     const enhancedRecord = { ...record }; // Start with original record
+    console.log(`Processing record:`, record);
     
     // Process each reference field for this entity
     for (const mapping of mappings) {
-      const fieldValue = record[mapping.field];
-      
-      // Skip if field value is null, undefined, or empty
-      if (fieldValue === null || fieldValue === undefined || fieldValue === '' || fieldValue === 0) {
-        // Add a readable placeholder instead of the raw value
-        enhancedRecord[`${mapping.displayName}_Name`] = '(Not Set)';
-        continue;
-      }
-      
-      try {
-        // Query the reference table to get the name
-        const refResults = await conn.query(
-          `SELECT ${mapping.refNameField} FROM ${mapping.refTable} WHERE ${mapping.refIdField} = ? AND IsDeleted != 'Y'`,
-          [fieldValue]
-        );
-        
-        if (refResults.length > 0) {
-          // Add the readable name as a new field
-          enhancedRecord[`${mapping.displayName}_Name`] = refResults[0][mapping.refNameField];
-        } else {
-          // If reference not found, show the original ID with a warning
-          enhancedRecord[`${mapping.displayName}_Name`] = `(ID: ${fieldValue} - Not Found)`;
-        }
-      } catch (error) {
-        console.error(`Error fetching reference for ${entity}.${mapping.field} with value ${fieldValue}:`, error);
-        // Fallback to showing the ID if there's an error
-        enhancedRecord[`${mapping.displayName}_Name`] = `(ID: ${fieldValue} - Error)`;
-      }
+      await processReferenceField(enhancedRecord, mapping, conn);
     }
     
     enhancedRecords.push(enhancedRecord);
   }
 
   return enhancedRecords;
+}
+
+// Recursive function to process reference fields and nested references
+async function processReferenceField(record, mapping, conn) {
+  const fieldValue = record[mapping.field];
+  console.log(`Checking reference field ${mapping.field} with value:`, fieldValue);
+  
+  // Skip if field value is null, undefined, or empty
+  if (fieldValue === null || fieldValue === undefined || fieldValue === '' || fieldValue === 0) {
+    console.log(`Field ${mapping.field} is empty, setting as '(Not Set)'`);
+    // Add a readable placeholder instead of the raw value
+    record[`${mapping.displayName}_Name`] = '(Not Set)';
+    return;
+  }
+  
+  try {
+    // Query the reference table to get the name
+    console.log(`Querying reference table: SELECT ${mapping.refNameField} FROM ${mapping.refTable} WHERE ${mapping.refIdField} = ${fieldValue} AND IsDeleted != 'Y'`);
+    const refResults = await conn.query(
+      `SELECT ${mapping.refIdField}, ${mapping.refNameField} FROM ${mapping.refTable} WHERE ${mapping.refIdField} = ? AND IsDeleted != 'Y'`,
+      [fieldValue]
+    );
+    
+    console.log(`Reference query result for ${mapping.field}=${fieldValue}:`, refResults);
+    
+    if (refResults.length > 0) {
+      // Add the readable name as a new field
+      console.log(`Setting ${mapping.displayName}_Name to:`, refResults[0][mapping.refNameField]);
+      record[`${mapping.displayName}_Name`] = refResults[0][mapping.refNameField];
+      
+      // Process nested references if they exist
+      if (mapping.nestedRefs && refResults[0][mapping.refIdField]) {
+        for (const nestedMapping of mapping.nestedRefs) {
+          // Get the nested field value from the reference result
+          const nestedFieldValue = refResults[0][nestedMapping.field];
+          console.log(`Processing nested reference ${nestedMapping.field} with value:`, nestedFieldValue);
+          
+          if (nestedFieldValue !== null && nestedFieldValue !== undefined && nestedFieldValue !== '' && nestedFieldValue !== 0) {
+            try {
+              const nestedRefResults = await conn.query(
+                `SELECT ${nestedMapping.refNameField} FROM ${nestedMapping.refTable} WHERE ${nestedMapping.refIdField} = ? AND IsDeleted != 'Y'`,
+                [nestedFieldValue]
+              );
+              
+              if (nestedRefResults.length > 0) {
+                console.log(`Setting ${nestedMapping.displayName}_Name to:`, nestedRefResults[0][nestedMapping.refNameField]);
+                record[`${nestedMapping.displayName}_Name`] = nestedRefResults[0][nestedMapping.refNameField];
+                
+                // Process further nested references if they exist
+                if (nestedMapping.nestedRefs) {
+                  // We could continue nesting, but for now just process one level deeper
+                  for (const deeperNestedMapping of nestedMapping.nestedRefs) {
+                    const deeperNestedFieldValue = nestedRefResults[0][deeperNestedMapping.field];
+                    
+                    if (deeperNestedFieldValue !== null && deeperNestedFieldValue !== undefined && deeperNestedFieldValue !== '' && deeperNestedFieldValue !== 0) {
+                      try {
+                        const deeperRefResults = await conn.query(
+                          `SELECT ${deeperNestedMapping.refNameField} FROM ${deeperNestedMapping.refTable} WHERE ${deeperNestedMapping.refIdField} = ? AND IsDeleted != 'Y'`,
+                          [deeperNestedFieldValue]
+                        );
+                        
+                        if (deeperRefResults.length > 0) {
+                          console.log(`Setting ${deeperNestedMapping.displayName}_Name to:`, deeperRefResults[0][deeperNestedMapping.refNameField]);
+                          record[`${deeperNestedMapping.displayName}_Name`] = deeperRefResults[0][deeperNestedMapping.refNameField];
+                        } else {
+                          record[`${deeperNestedMapping.displayName}_Name`] = `(ID: ${deeperNestedFieldValue} - Not Found)`;
+                        }
+                      } catch (error) {
+                        console.error(`Error fetching deeper nested reference for ${nestedMapping.displayName}.${deeperNestedMapping.field}:`, error);
+                        record[`${deeperNestedMapping.displayName}_Name`] = `(ID: ${deeperNestedFieldValue} - Error)`;
+                      }
+                    }
+                  }
+                }
+              } else {
+                record[`${nestedMapping.displayName}_Name`] = `(ID: ${nestedFieldValue} - Not Found)`;
+              }
+            } catch (error) {
+              console.error(`Error fetching nested reference for ${mapping.displayName}.${nestedMapping.field}:`, error);
+              record[`${nestedMapping.displayName}_Name`] = `(ID: ${nestedFieldValue} - Error)`;
+            }
+          }
+        }
+      }
+    } else {
+      // If reference not found, show the original ID with a warning
+      console.log(`Reference not found for ${mapping.field}=${fieldValue}, setting as '(ID: ${fieldValue} - Not Found)'`);
+      record[`${mapping.displayName}_Name`] = `(ID: ${fieldValue} - Not Found)`;
+    }
+  } catch (error) {
+    console.error(`Error fetching reference for ${entity}.${mapping.field} with value ${fieldValue}:`, error);
+    // Fallback to showing the ID if there's an error
+    record[`${mapping.displayName}_Name`] = `(ID: ${fieldValue} - Error)`;
+  }
 }
 
 // Get all SOFT-DELETED records for a specific table with pagination
@@ -364,6 +486,9 @@ router.get('/:entity/references', adminOnlyMiddleware, async (req, res) => {
     try {
       conn = await db.getConnection();
       
+      // Get table schema to determine field requirements
+      const tableSchema = await getTableSchema(tableName, conn);
+      
       // Define reference mappings
       const referenceQueries = {
         'product': [
@@ -412,6 +537,9 @@ router.get('/:entity/references', adminOnlyMiddleware, async (req, res) => {
           references[ref.table] = refData;
         }
       }
+
+      // Add schema information to the response
+      references.schema = tableSchema;
 
       console.log('Successfully fetched references for entity:', entity);
       console.log('References:', references);
@@ -552,28 +680,31 @@ router.post('/:entity', adminOnlyMiddleware, async (req, res) => {
 
     const inputData = req.body;
 
-    // Remove primary key if present in input
-    const { [primaryKey]: _, ...data } = inputData;
-
-    // Build query dynamically
-    const fields = Object.keys(data);
-    const values = Object.values(data);
-
-    // Set default values for audit fields
-    data.RecordCreationTimeStamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    data.LastUpdationTimeStamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    data.RecordCreationLogin = 'admin';
-    data.LastUpdationLogin = 'admin';
-    data.IsDeleted = '';
-
-    // Update fields and values with audit fields
-    const finalFields = Object.keys(data);
-    const finalValues = Object.values(data);
-
     let conn;
     try {
       conn = await db.getConnection();
       
+      // Get table schema to validate required fields
+      const tableSchema = await getTableSchema(tableName, conn);
+      
+      // Validate required fields and apply defaults
+      const validatedInput = await validateAndApplyDefaults(inputData, tableSchema, tableName, conn);
+      
+      // Build query dynamically
+      const fields = Object.keys(validatedInput);
+      const values = Object.values(validatedInput);
+
+      // Set default values for audit fields
+      validatedInput.RecordCreationTimeStamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      validatedInput.LastUpdationTimeStamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      validatedInput.RecordCreationLogin = 'admin';
+      validatedInput.LastUpdationLogin = 'admin';
+      validatedInput.IsDeleted = '';
+
+      // Update fields and values with audit fields
+      const finalFields = Object.keys(validatedInput);
+      const finalValues = Object.values(validatedInput);
+
       const placeholders = finalValues.map(() => '?').join(',');
       const query = `INSERT INTO ${tableName} (${finalFields.join(', ')}) VALUES (${placeholders})`;
       
@@ -599,6 +730,47 @@ router.post('/:entity', adminOnlyMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// Helper function to validate input and apply defaults
+async function validateAndApplyDefaults(inputData, tableSchema, tableName, conn) {
+  const validatedData = { ...inputData };
+  
+  for (const [fieldName, fieldInfo] of Object.entries(tableSchema)) {
+    // Skip audit fields and auto-increment fields
+    if (['RecordCreationTimeStamp', 'RecordCreationLogin', 'LastUpdationTimeStamp', 'LastUpdationLogin', 'IsDeleted'].includes(fieldName)) {
+      continue;
+    }
+    
+    // Skip if it's the primary key (usually auto-increment)
+    if (fieldInfo.columnKey === 'PRI' && fieldInfo.extra === 'auto_increment') {
+      continue;
+    }
+    
+    // Check if field is required (not nullable and no default value)
+    if (!fieldInfo.nullable && fieldInfo.defaultValue === null && fieldInfo.extra !== 'auto_increment') {
+      // This is a required field - must have a value
+      if (!(fieldName in validatedData) || validatedData[fieldName] === null || validatedData[fieldName] === undefined || validatedData[fieldName] === '') {
+        // Field is required but not provided
+        throw new Error(`Required field '${fieldName}' is missing or empty`);
+      }
+    } else {
+      // Field is optional (either nullable or has a default)
+      if (!(fieldName in validatedData) || validatedData[fieldName] === null || validatedData[fieldName] === undefined || validatedData[fieldName] === '') {
+        if (fieldInfo.defaultValue !== null) {
+          // Use database default value
+          validatedData[fieldName] = fieldInfo.defaultValue;
+        } else if (fieldInfo.nullable) {
+          // Field allows null, set to null if not provided
+          validatedData[fieldName] = null;
+        }
+        // If field is non-nullable but optional with no default, we don't set a default here
+        // because it should have been provided by the user
+      }
+    }
+  }
+  
+  return validatedData;
+}
 
 // Update an existing record
 router.put('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
@@ -662,7 +834,7 @@ router.put('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
   }
 });
 
-// Soft delete a record
+// Soft delete a record with dependency checking
 router.delete('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
   try {
     const entity = req.params.entity;
@@ -682,6 +854,97 @@ router.delete('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
       const tableInfo = await conn.query(`DESCRIBE ${tableName}`);
       const hasIsDeleted = tableInfo.some(col => col.Field === 'IsDeleted');
       
+      // Define dependency relationships
+      const dependencies = {
+        'product': [
+          { table: 'vendorproduct', field: 'Product', name: 'Vendor Products' },
+          { table: 'purchaseitem', field: 'Product', name: 'Purchase Items' }
+        ],
+        'productcategory': [
+          { table: 'product', field: 'ProductCategory_Gen', name: 'Products' },
+          { table: 'productsubcategory', field: 'ProductCategory', name: 'Product Subcategories' }
+        ],
+        'productsubcategory': [
+          { table: 'product', field: 'ProductSubCategory', name: 'Products' }
+        ],
+        'model': [
+          { table: 'product', field: 'Model', name: 'Products' }
+        ],
+        'brand': [
+          { table: 'model', field: 'Brand', name: 'Models' }
+        ],
+        'company': [
+          { table: 'brand', field: 'Company', name: 'Brands' }
+        ],
+        'color': [
+          { table: 'product', field: 'Color', name: 'Products' }
+        ],
+        'size': [
+          { table: 'product', field: 'Size', name: 'Products' }
+        ],
+        'unit': [
+          { table: 'product', field: 'Unit', name: 'Products' }
+        ],
+        'currency': [
+          { table: 'product', field: 'Currency', name: 'Products' }
+        ],
+        'shape': [
+          { table: 'product', field: 'Shape', name: 'Products' }
+        ],
+        'material': [
+          { table: 'model', field: 'Material', name: 'Models' }
+        ],
+        'continent': [
+          { table: 'country', field: 'Continent', name: 'Countries' }
+        ],
+        'country': [
+          { table: 'state', field: 'Country', name: 'States' }
+        ],
+        'state': [
+          { table: 'district', field: 'State', name: 'Districts' }
+        ],
+        'district': [
+          { table: 'locality', field: 'District', name: 'Localities' }
+        ],
+        'locality': [
+          { table: 'company', field: 'Locality', name: 'Companies' }
+        ]
+      };
+
+      // Check for dependencies if this entity has dependencies defined
+      if (dependencies[entity]) {
+        const deps = dependencies[entity];
+        const dependencyIssues = [];
+        
+        for (const dep of deps) {
+          // Check if there are active (non-deleted) records referencing this item
+          const depCheck = await conn.query(
+            `SELECT COUNT(*) as count FROM ${dep.table} WHERE ${dep.field} = ? AND IsDeleted != 'Y'`,
+            [id]
+          );
+          
+          const count = typeof depCheck[0].count === 'bigint' ? Number(depCheck[0].count) : depCheck[0].count;
+          
+          if (count > 0) {
+            dependencyIssues.push({
+              table: dep.table,
+              field: dep.field,
+              count: count,
+              name: dep.name
+            });
+          }
+        }
+        
+        // If there are dependencies, prevent deletion
+        if (dependencyIssues.length > 0) {
+          return res.status(400).json({
+            error: 'Cannot delete this record because it is referenced by other records',
+            dependencies: dependencyIssues,
+            message: `This ${entity} is used in ${dependencyIssues.length} other table(s). Please remove or reassign these references first.`
+          });
+        }
+      }
+      
       if (hasIsDeleted) {
         // Perform soft delete
         await conn.query(
@@ -696,7 +959,10 @@ router.delete('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
         );
       }
 
-      res.json({ message: 'Record deleted successfully' });
+      res.json({ 
+        message: 'Record deleted successfully',
+        dependenciesChecked: dependencies[entity] ? true : false
+      });
     } finally {
       if (conn) conn.release();
     }

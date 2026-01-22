@@ -23,11 +23,44 @@ interface ReferenceData {
 // Helper function to get display value for a field
 const getDisplayValue = (record: EntityRecord, field: string): string => {
   // Check if there's a human-readable name version of this field
-  const nameField = `${field.replace(/Id$/, '')}_Name`;
+  // Map the original field names to the corresponding name field names
+  const fieldNameMapping: Record<string, string> = {
+    'ProductCategory_Gen': 'Category_Name',
+    'ProductSubCategory': 'SubCategory_Name',
+    'Model': 'Model_Name',
+    'Unit': 'Unit_Name',
+    'Currency': 'Currency_Name',
+    'Color': 'Color_Name',
+    'Size': 'Size_Name',
+    'Shape': 'Shape_Name',
+    'Brand': 'Brand_Name',
+    'Material': 'Material_Name',
+    'Company': 'Company_Name',
+    'Locality': 'Locality_Name',
+    'Continent': 'Continent_Name',
+    'Country': 'Country_Name',
+    'State': 'State_Name',
+    'District': 'District_Name'
+  };
+
+  const nameField = fieldNameMapping[field];
   
   // If the name field exists and has a meaningful value, use it
-  if (nameField in record && record[nameField] && !record[nameField].startsWith('(ID:') && record[nameField] !== '(Not Set)') {
+  if (nameField && nameField in record && record[nameField] && !record[nameField].startsWith('(ID:') && record[nameField] !== '(Not Set)') {
     return record[nameField];
+  }
+  
+  // Special case for products - if we're looking for Model and we have Brand_Name or Company_Name available
+  if (field === 'Model' && record['Brand_Name'] && !record['Brand_Name'].startsWith('(ID:')) {
+    let result = record['Model_Name'] || String(record[field]);
+    if (record['Brand_Name'] && record['Brand_Name'] !== '(Not Set)' && !record['Brand_Name'].startsWith('(ID:')) {
+      result += ` (${record['Brand_Name']}`;
+      if (record['Company_Name'] && record['Company_Name'] !== '(Not Set)' && !record['Company_Name'].startsWith('(ID:')) {
+        result += ` - ${record['Company_Name']}`;
+      }
+      result += ')';
+    }
+    return result;
   }
   
   // Otherwise, return the original value
