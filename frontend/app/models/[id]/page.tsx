@@ -206,9 +206,7 @@ export default function ModelDetailPage() {
   async function handleAddToCart(vendor: VendorInfo) {
     const token = localStorage.getItem('token')
     if (!token) {
-      alert('Please login before adding items to cart')
-      // Optionally redirect to login page
-      // window.location.href = '/auth/signin'
+      window.location.href = '/signin'
       return
     }
 

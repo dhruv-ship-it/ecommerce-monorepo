@@ -76,7 +76,7 @@ export default function ProductDetailsPage() {
     try {
       const token = localStorage.getItem('token')
       if (!token) {
-        alert('Please log in to add items to cart')
+        window.location.href = '/signin'
         return
       }
 
@@ -170,7 +170,7 @@ export default function ProductDetailsPage() {
           </div>
           {displayImages.length > 1 && (
             <div className="grid grid-cols-4 gap-2">
-              {displayImages.map((image, index) => (
+              {displayImages.map((image: any, index: number) => (
                 <button
                   key={index}
                   onClick={() => setSelectedImage(index)}
@@ -375,7 +375,7 @@ export default function ProductDetailsPage() {
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Category</h4>
-                <p className="text-gray-600">{product.ProductCategory} > {product.ProductSubCategory}</p>
+                <p className="text-gray-600">{product.ProductCategory} &#62; {product.ProductSubCategory}</p>
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Material & Specifications</h4>

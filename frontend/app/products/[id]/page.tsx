@@ -76,7 +76,7 @@ export default function ProductDetailsPage() {
     try {
       const token = localStorage.getItem('token')
       if (!token) {
-        alert('Please log in to add items to cart')
+        window.location.href = '/signin'
         return
       }
 

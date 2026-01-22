@@ -162,20 +162,20 @@ export default function ManageCustomersPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              customer.IsDeleted === "Y"
-                                ? "bg-red-100 text-red-800"
+                              customer.IsDead === "Y"
+                                ? "bg-gray-800 text-white"
                                 : customer.IsBlackListed === "Y"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : customer.IsVerified === "Y" && customer.IsActivated === "Y"
+                                ? "bg-red-100 text-red-800"
+                                : customer.IsActivated === "Y"
                                 ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
+                                : "bg-yellow-100 text-yellow-800"
                             }`}
                           >
-                            {customer.IsDeleted === "Y"
-                              ? "Deleted"
+                            {customer.IsDead === "Y"
+                              ? "Dead"
                               : customer.IsBlackListed === "Y"
                               ? "Blacklisted"
-                              : customer.IsVerified === "Y" && customer.IsActivated === "Y"
+                              : customer.IsActivated === "Y"
                               ? "Active"
                               : "Inactive"}
                           </span>

@@ -165,14 +165,18 @@ export default function ManageUsersPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.IsBlackListed === "Y"
+                              user.IsDead === "Y"
+                                ? "bg-gray-800 text-white"
+                                : user.IsBlackListed === "Y"
                                 ? "bg-red-100 text-red-800"
                                 : user.IsActivated === "Y"
                                 ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
+                                : "bg-yellow-100 text-yellow-800"
                             }`}
                           >
-                            {user.IsBlackListed === "Y"
+                            {user.IsDead === "Y"
+                              ? "Dead"
+                              : user.IsBlackListed === "Y"
                               ? "Blacklisted"
                               : user.IsActivated === "Y"
                               ? "Active"

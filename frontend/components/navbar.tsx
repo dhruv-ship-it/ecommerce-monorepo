@@ -27,8 +27,7 @@ export function Navbar() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
-  const [openSignIn, setOpenSignIn] = useState(false);
-  const [openSignUp, setOpenSignUp] = useState(false);
+  // Removed modal states since we're using separate pages now
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
@@ -109,104 +108,7 @@ export function Navbar() {
     performCustomerLogout('/');
   }
 
-  // Sign In form state
-  const signInForm = useForm({ defaultValues: { email: '', password: '' } });
-  const [signInError, setSignInError] = useReactState('');
-  const [signInLoading, setSignInLoading] = useReactState(false);
-
-  // Sign Up form state
-  const signUpForm = useForm({ defaultValues: { name: '', gender: '', mobile: '', email: '', password: '', address: '', dob: '', pin: '', locality: 0 } });
-  const [signUpError, setSignUpError] = useReactState('');
-  const [signUpSuccess, setSignUpSuccess] = useReactState('');
-  const [signUpLoading, setSignUpLoading] = useReactState(false);
-  const [localities, setLocalities] = useState<{id: number, name: string}[]>([]);
-  
-  useEffect(() => {
-    // Fetch localities when the sign-up modal is opened
-    if (openSignUp) {
-      fetchLocalities();
-    }
-  }, [openSignUp]);
-  
-  const fetchLocalities = async () => {
-    try {
-      const response = await fetch(`${API}/api/localities`);
-      if (response.ok) {
-        const data = await response.json();
-        setLocalities(Array.isArray(data.localities) ? data.localities : []);
-      }
-    } catch (err) {
-      console.error('Error fetching localities:', err);
-    }
-  };
-
-  async function handleSignIn(data: any) {
-    setSignInLoading(true);
-    setSignInError('');
-    try {
-      // Remove any SU token before customer login
-      localStorage.removeItem('su_token');
-      localStorage.removeItem('admin_token');
-      const res = await fetch(`${API}/api/auth/customer-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      const json = await res.json();
-      setSignInLoading(false);
-      if (!res.ok) {
-        setSignInError(json.error || 'Invalid email or password');
-      } else {
-        localStorage.setItem('token', json.token);
-        setOpenSignIn(false);
-        signInForm.reset();
-        // Optionally, reload or update UI to reflect logged-in state
-        window.location.reload();
-      }
-    } catch (err: any) {
-      setSignInLoading(false);
-      setSignInError('Login failed');
-    }
-  }
-
-  async function handleSignUp(data: any) {
-    setSignUpLoading(true);
-    setSignUpError('');
-    setSignUpSuccess('');
-    try {
-      const res = await fetch(`${API}/api/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
-          gender: data.gender,
-          mobile: data.mobile,
-          email: data.email,
-          password: data.password,
-          address: data.address,
-          dob: data.dob,
-          pin: data.pin,
-          locality: data.locality,
-        }),
-      });
-      const json = await res.json();
-      setSignUpLoading(false);
-      if (!res.ok) {
-        setSignUpError(json.error || 'Sign up failed');
-      } else {
-        setSignUpSuccess('Account created! You can now sign in.');
-        setTimeout(() => {
-          setOpenSignUp(false);
-          setSignUpSuccess('');
-          signUpForm.reset();
-          setOpenSignIn(true);
-        }, 1200);
-      }
-    } catch (err: any) {
-      setSignUpLoading(false);
-      setSignUpError('Sign up failed');
-    }
-  }
+  // Removed modal form states and handlers since we're using separate pages now
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -294,20 +196,19 @@ export function Navbar() {
               </DropdownMenu>
             ) : (
               <div className="hidden sm:flex items-center space-x-2">
-                <Button variant="ghost" size="sm" onClick={() => setOpenSignIn(true)}>
-                  Sign In
-                </Button>
-                <Button size="sm" onClick={() => setOpenSignUp(true)}>
-                  Sign Up
-                </Button>
+                <Link href="/signin">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button size="sm">
+                    Sign Up
+                  </Button>
+                </Link>
               </div>
             )}
-            {/* Mobile Auth */}
-            {!isLoggedIn && (
-              <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setOpenSignIn(true)}>
-                <User className="h-5 w-5" />
-              </Button>
-            )}
+            {/* Mobile Auth - Removed since we're using separate pages now */}
             {/* Cart */}
             {isLoggedIn && (
               <Link href="/cart">
@@ -327,214 +228,7 @@ export function Navbar() {
           </div>
         </div>
       </div>
-      {/* Sign In Dialog */}
-      <Dialog open={openSignIn} onOpenChange={setOpenSignIn}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign In</DialogTitle>
-          </DialogHeader>
-          {signInError && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{signInError}</AlertDescription>
-            </Alert>
-          )}
-          <Form {...signInForm}>
-            <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
-              <FormField
-                control={signInForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signInForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Password" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full" disabled={signInLoading}>
-                {signInLoading ? 'Signing In...' : 'Sign In'}
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-      {/* Sign Up Dialog */}
-      <Dialog open={openSignUp} onOpenChange={setOpenSignUp}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign Up</DialogTitle>
-          </DialogHeader>
-          {signUpError && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{signUpError}</AlertDescription>
-            </Alert>
-          )}
-          {signUpSuccess && (
-            <Alert>
-              <AlertTitle>Success</AlertTitle>
-              <AlertDescription>{signUpSuccess}</AlertDescription>
-            </Alert>
-          )}
-          <Form {...signUpForm}>
-            <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="space-y-4">
-              <FormField
-                control={signUpForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Your Name" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="gender"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Gender</FormLabel>
-                    <FormControl>
-                      <select {...field} required className="w-full border rounded p-2">
-                        <option value="">Select Gender</option>
-                        <option value="M">Male</option>
-                        <option value="F">Female</option>
-                        <option value="O">Other</option>
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="mobile"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mobile</FormLabel>
-                    <FormControl>
-                      <Input type="tel" placeholder="Mobile Number" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Password" {...field} required minLength={6} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Address" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="dob"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date of Birth</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} required />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="pin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PIN</FormLabel>
-                    <FormControl>
-                      <Input type="text" placeholder="Enter a PIN (e.g. 1234)" {...field} required minLength={4} maxLength={10} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signUpForm.control}
-                name="locality"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Locality</FormLabel>
-                    <FormControl>
-                      <select 
-                        {...field} 
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                        className="w-full border rounded p-2"
-                      >
-                        <option value="0">Select Locality</option>
-                        {localities.map(locality => (
-                          <option key={locality.id} value={locality.id}>
-                            {locality.name}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full" disabled={signUpLoading}>
-                {signUpLoading ? 'Signing Up...' : 'Sign Up'}
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Removed all modal dialogs since we're using separate pages now */}
     </header>
   )
 }
