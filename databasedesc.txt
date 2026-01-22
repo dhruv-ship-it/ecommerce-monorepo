@@ -733,3 +733,87 @@ MariaDB [ecomv1]> show create table vendorproductcustomercourier;
 1 row in set (0.002 sec)
 
 MariaDB [ecomv1]>
+MariaDB [ecomv1]> desc product_images;
++-------------------------+------------------------------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type                               | Null | Key | Default             | Extra                         |
++-------------------------+------------------------------------+------+-----+---------------------+-------------------------------+
+| ImageId                 | int(8) unsigned                    | NO   | PRI | NULL                | auto_increment                |
+| ProductId               | int(8) unsigned                    | NO   | MUL | NULL                |                               |
+| ImageType               | enum('thumbnail','main','gallery') | NO   | MUL | gallery             |                               |
+| ImagePath               | varchar(255)                       | NO   |     | NULL                |                               |
+| ImageOrder              | int(2)                             | YES  |     | 0                   |                               |
+| IsActive                | char(1)                            | NO   | MUL | Y                   |                               |
+| IsDeleted               | char(1)                            | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime                           | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)                        | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime                           | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)                        | NO   |     |                     |                               |
++-------------------------+------------------------------------+------+-----+---------------------+-------------------------------+
+11 rows in set (0.036 sec)
+
+MariaDB [ecomv1]> select * from product_images;
++---------+-----------+-----------+--------------------------------------------------------------------+------------+----------+-----------+-------------------------+---------------------+-----------------------+-------------------+
+| ImageId | ProductId | ImageType | ImagePath                                                          | ImageOrder | IsActive | IsDeleted | RecordCreationTimeStamp | RecordCreationLogin | LastUpdationTimeStamp | LastUpdationLogin |
++---------+-----------+-----------+--------------------------------------------------------------------+------------+----------+-----------+-------------------------+---------------------+-----------------------+-------------------+
+|       1 |         1 | thumbnail | /static/images/products/nike-air-max-black-9uk/thumb.jpg           |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       2 |         1 | main      | /static/images/products/nike-air-max-black-9uk/main.jpg            |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       3 |         1 | gallery   | /static/images/products/nike-air-max-black-9uk/gallery/1.jpg       |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       4 |         1 | gallery   | /static/images/products/nike-air-max-black-9uk/gallery/2.jpg       |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       5 |         1 | gallery   | /static/images/products/nike-air-max-black-9uk/gallery/3.jpg       |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       6 |         2 | thumbnail | /static/images/products/nike-air-max-white-10uk/thumb.jpg          |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       7 |         2 | main      | /static/images/products/nike-air-max-white-10uk/main.jpg           |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       8 |         2 | gallery   | /static/images/products/nike-air-max-white-10uk/gallery/1.jpg      |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|       9 |         2 | gallery   | /static/images/products/nike-air-max-white-10uk/gallery/2.jpg      |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      10 |         2 | gallery   | /static/images/products/nike-air-max-white-10uk/gallery/3.jpg      |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      11 |         3 | thumbnail | /static/images/products/nike-revolution-blue-10uk/thumb.jpg        |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      12 |         3 | main      | /static/images/products/nike-revolution-blue-10uk/main.jpg         |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      13 |         3 | gallery   | /static/images/products/nike-revolution-blue-10uk/gallery/1.jpg    |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      14 |         3 | gallery   | /static/images/products/nike-revolution-blue-10uk/gallery/2.jpg    |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      15 |         3 | gallery   | /static/images/products/nike-revolution-blue-10uk/gallery/3.jpg    |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      16 |         4 | thumbnail | /static/images/products/adidas-ultraboost-black-9uk/thumb.jpg      |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      17 |         4 | main      | /static/images/products/adidas-ultraboost-black-9uk/main.jpg       |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      18 |         4 | gallery   | /static/images/products/adidas-ultraboost-black-9uk/gallery/1.jpg  |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      19 |         4 | gallery   | /static/images/products/adidas-ultraboost-black-9uk/gallery/2.jpg  |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      20 |         4 | gallery   | /static/images/products/adidas-ultraboost-black-9uk/gallery/3.jpg  |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      21 |         5 | thumbnail | /static/images/products/adidas-ultraboost-white-10uk/thumb.jpg     |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      22 |         5 | main      | /static/images/products/adidas-ultraboost-white-10uk/main.jpg      |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      23 |         5 | gallery   | /static/images/products/adidas-ultraboost-white-10uk/gallery/1.jpg |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      24 |         5 | gallery   | /static/images/products/adidas-ultraboost-white-10uk/gallery/2.jpg |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      25 |         5 | gallery   | /static/images/products/adidas-ultraboost-white-10uk/gallery/3.jpg |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      26 |         6 | thumbnail | /static/images/products/levis-t-shirt-blue-m/thumb.jpg             |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      27 |         6 | main      | /static/images/products/levis-t-shirt-blue-m/main.jpg              |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      28 |         6 | gallery   | /static/images/products/levis-t-shirt-blue-m/gallery/1.jpg         |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      29 |         6 | gallery   | /static/images/products/levis-t-shirt-blue-m/gallery/2.jpg         |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      30 |         6 | gallery   | /static/images/products/levis-t-shirt-blue-m/gallery/3.jpg         |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      31 |         7 | thumbnail | /static/images/products/levis-t-shirt-red-l/thumb.jpg              |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      32 |         7 | main      | /static/images/products/levis-t-shirt-red-l/main.jpg               |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      33 |         7 | gallery   | /static/images/products/levis-t-shirt-red-l/gallery/1.jpg          |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      34 |         7 | gallery   | /static/images/products/levis-t-shirt-red-l/gallery/2.jpg          |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      35 |         7 | gallery   | /static/images/products/levis-t-shirt-red-l/gallery/3.jpg          |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      36 |         8 | thumbnail | /static/images/products/levis-jeans-blue-m/thumb.jpg               |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      37 |         8 | main      | /static/images/products/levis-jeans-blue-m/main.jpg                |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      38 |         8 | gallery   | /static/images/products/levis-jeans-blue-m/gallery/1.jpg           |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      39 |         8 | gallery   | /static/images/products/levis-jeans-blue-m/gallery/2.jpg           |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      40 |         8 | gallery   | /static/images/products/levis-jeans-blue-m/gallery/3.jpg           |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      41 |         9 | thumbnail | /static/images/products/levis-jeans-black-l/thumb.jpg              |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      42 |         9 | main      | /static/images/products/levis-jeans-black-l/main.jpg               |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      43 |         9 | gallery   | /static/images/products/levis-jeans-black-l/gallery/1.jpg          |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      44 |         9 | gallery   | /static/images/products/levis-jeans-black-l/gallery/2.jpg          |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      45 |         9 | gallery   | /static/images/products/levis-jeans-black-l/gallery/3.jpg          |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      46 |        10 | thumbnail | /static/images/products/levis-jacket-black-xl/thumb.jpg            |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      47 |        10 | main      | /static/images/products/levis-jacket-black-xl/main.jpg             |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      48 |        10 | gallery   | /static/images/products/levis-jacket-black-xl/gallery/1.jpg        |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      49 |        10 | gallery   | /static/images/products/levis-jacket-black-xl/gallery/2.jpg        |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      50 |        10 | gallery   | /static/images/products/levis-jacket-black-xl/gallery/3.jpg        |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      51 |        11 | thumbnail | /static/images/products/fossil-gen5-watch-black/thumb.jpg          |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      52 |        11 | main      | /static/images/products/fossil-gen5-watch-black/main.jpg           |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      53 |        11 | gallery   | /static/images/products/fossil-gen5-watch-black/gallery/1.jpg      |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      54 |        11 | gallery   | /static/images/products/fossil-gen5-watch-black/gallery/2.jpg      |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      55 |        11 | gallery   | /static/images/products/fossil-gen5-watch-black/gallery/3.jpg      |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      56 |        12 | thumbnail | /static/images/products/fossil-gen5-watch-white/thumb.jpg          |          1 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      57 |        12 | main      | /static/images/products/fossil-gen5-watch-white/main.jpg           |          2 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      58 |        12 | gallery   | /static/images/products/fossil-gen5-watch-white/gallery/1.jpg      |          3 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      59 |        12 | gallery   | /static/images/products/fossil-gen5-watch-white/gallery/2.jpg      |          4 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
+|      60 |        12 | gallery   | /static/images/products/fossil-gen5-watch-white/gallery/3.jpg      |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
++---------+-----------+-----------+--------------------------------------------------------------------+------------+----------+-----------+-------------------------+---------------------+-----------------------+-------------------+
+60 rows in set (0.001 sec)

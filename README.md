@@ -1,6 +1,6 @@
-# E-Commerce Monorepo
+# SmartKart - E-Commerce Monorepo
 
-A full-stack e-commerce application with separate frontend portals for customers and administrators.
+A full-stack e-commerce application with separate frontend portals for customers and administrators - SmartKart Management System.
 
 ## 🏗️ Project Structure
 
@@ -8,7 +8,7 @@ A full-stack e-commerce application with separate frontend portals for customers
 ecom/
 ├── backend/                 # Express.js + MariaDB backend API
 ├── frontend/               # Customer-facing Next.js frontend (port 3000)
-├── ecomgm-frontend/        # Admin/Management Next.js frontend (port 3001)
+├── ecomgm-frontend/        # Admin/Management Next.js frontend - SmartKartMGM (port 3001)
 └── README.md               # This file
 ```
 
@@ -36,7 +36,7 @@ npm run dev          # Runs on port 3000
 
 ### Admin Frontend Setup
 ```bash
-cd ecomgm-frontend
+cd ecomgm-frontend  # SmartKartMGM Admin Portal
 npm install
 npm run dev          # Runs on port 3001
 ```
@@ -48,7 +48,7 @@ npm run dev          # Runs on port 3001
 - **Sign In**: Customer login with email/username
 - **Features**: Product browsing, cart, orders, profile management
 
-### Admin Portal (`ecomgm-frontend/`)
+### Admin Portal (`ecomgm-frontend/`) - SmartKartMGM
 - **SU Login**: Supreme Admin access (creates users, manages customers)
 - **User Login**: Admin/Vendor/Courier access with role-based dashboards
 - **Features**: User management, customer oversight, role-specific operations
@@ -109,8 +109,8 @@ npm run dev      # Development server
 npm run build    # Production build
 npm start        # Production server
 
-# Admin Portal
-cd ecomgm-frontend
+# Admin Portal - SmartKartMGM
+cd ecomgm-frontend  # SmartKartMGM Admin Portal
 npm run dev      # Development server
 npm run build    # Production build
 npm start        # Production server
@@ -120,7 +120,7 @@ npm start        # Production server
 
 1. Start backend: `cd backend && npm start`
 2. Start customer frontend: `cd frontend && npm run dev`
-3. Start admin frontend: `cd ecomgm-frontend && npm run dev`
+3. Start admin frontend: `cd ecomgm-frontend && npm run dev` (SmartKartMGM Admin Portal)
 4. Test customer signup/login at `http://localhost:3000`
 5. Test admin login at `http://localhost:3001`
 

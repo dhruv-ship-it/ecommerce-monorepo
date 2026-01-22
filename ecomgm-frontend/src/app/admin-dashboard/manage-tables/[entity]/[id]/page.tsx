@@ -24,6 +24,13 @@ const EntityEditPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [referenceData, setReferenceData] = useState<ReferenceData>({});
 
+  // Image upload states
+  const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
+  const [mainImage, setMainImage] = useState<File | null>(null);
+  const [galleryImages, setGalleryImages] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<any[]>([]);
+  const [imageUploadProgress, setImageUploadProgress] = useState<{[key: string]: number}>({});
+
   // Get entity display name
   const getEntityDisplayName = (entityId: string): string => {
     const names: Record<string, string> = {
@@ -114,42 +121,63 @@ const EntityEditPage = () => {
     return refs[entityId.toLowerCase()] || {};
   };
 
-  useEffect(() => {
-    // Validate authentication
-    const isValid = validateAuth();
-    const user = getUserFromToken();
-    
-    if (!isValid || !user || user.userType !== 'user' || user.role !== 'admin') {
-      router.push('/login');
-      return;
-    }
-
-    if (entity && recordId) {
-      fetchRecord();
-    }
-  }, [entity, recordId, router]);
-
+  // Fetch the record and reference data
   const fetchRecord = async () => {
     try {
-      setLoading(true);
-      const validToken = getValidToken();
+      // Validate authentication
+      const isValid = validateAuth();
+      const user = getUserFromToken();
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/${recordId}`, {
+      if (!isValid || !user || user.userType !== 'user' || user.role !== 'admin') {
+        router.push('/login');
+        return;
+      }
+
+      setLoading(true);
+      
+      // Fetch the record
+      const validToken = getValidToken();
+      const recordResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/${recordId}`, {
         headers: {
           'Authorization': `Bearer ${validToken?.token || ''}`
         }
       });
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch record: ${response.statusText}`);
+      if (!recordResponse.ok) {
+        throw new Error(`Failed to fetch record: ${recordResponse.statusText}`);
       }
       
-      const data = await response.json();
-      setRecord(data);
-      setFormData({ ...data });
+      const recordData = await recordResponse.json();
+      setRecord(recordData);
+      setFormData(recordData);
       
-      // Fetch reference data
-      await fetchReferenceData();
+      // Fetch reference data for dropdowns
+      const referenceResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/references`, {
+        headers: {
+          'Authorization': `Bearer ${validToken?.token || ''}`
+        }
+      });
+      
+      if (!referenceResponse.ok) {
+        throw new Error(`Failed to fetch reference data: ${referenceResponse.statusText}`);
+      }
+      
+      const referenceData = await referenceResponse.json();
+      setReferenceData(referenceData);
+      
+      // If this is a product, fetch existing images
+      if (entity === 'product') {
+        const imagesResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${recordId}`, {
+          headers: {
+            'Authorization': `Bearer ${validToken?.token || ''}`
+          }
+        });
+        
+        if (imagesResponse.ok) {
+          const imagesData = await imagesResponse.json();
+          setExistingImages(imagesData.images);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred while fetching the record');
       console.error('Error fetching record:', err);
@@ -158,27 +186,13 @@ const EntityEditPage = () => {
     }
   };
 
-  const fetchReferenceData = async () => {
-    try {
-      const validToken = getValidToken();
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/${recordId}/references`, {
-        headers: {
-          'Authorization': `Bearer ${validToken?.token || ''}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch reference data: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setReferenceData(data);
-    } catch (err: any) {
-      console.error('Error fetching reference data:', err);
+  useEffect(() => {
+    if (entity && recordId) {
+      fetchRecord();
     }
-  };
+  }, [entity, recordId]);
 
+  // Handle form field changes
   const handleFieldChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -186,24 +200,46 @@ const EntityEditPage = () => {
     }));
   };
 
+  // Handle image file selection
+  const handleImageChange = (type: 'thumbnail' | 'main' | 'gallery', file: File | FileList | null) => {
+    if (type === 'gallery' && file instanceof FileList) {
+      const filesArray = Array.from(file);
+      // Limit to 3 gallery images
+      setGalleryImages(filesArray.slice(0, 3));
+    } else if (file instanceof File) {
+      if (type === 'thumbnail') {
+        setThumbnailImage(file);
+      } else if (type === 'main') {
+        setMainImage(file);
+      }
+    }
+  };
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       const validToken = getValidToken();
       
+      // Update the record
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/${recordId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${validToken?.token || ''}`,
+          'Authorization': `Bearer ${validToken?.token || ''}`
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(formData)
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update record');
+      }
+
+      // If this is a product entity and images were uploaded, upload them
+      if (entity === 'product') {
+        await uploadProductImages(parseInt(recordId));
       }
 
       // Redirect back to the entity list
@@ -214,49 +250,159 @@ const EntityEditPage = () => {
     }
   };
 
+  // Upload product images after product update
+  const uploadProductImages = async (productId: number) => {
+    const uploadPromises = [];
+    
+    // Upload thumbnail if selected
+    if (thumbnailImage) {
+      const formData = new FormData();
+      formData.append('image', thumbnailImage);
+      formData.append('imageType', 'thumbnail');
+      formData.append('productId', productId.toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Upload main image if selected
+    if (mainImage) {
+      const formData = new FormData();
+      formData.append('image', mainImage);
+      formData.append('imageType', 'main');
+      formData.append('productId', productId.toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Upload gallery images if selected
+    for (let i = 0; i < galleryImages.length; i++) {
+      const formData = new FormData();
+      formData.append('image', galleryImages[i]);
+      formData.append('imageType', 'gallery');
+      formData.append('galleryIndex', (i + 1).toString());
+      formData.append('productId', productId.toString());
+      formData.append('imageOrder', (i + 1).toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Wait for all uploads to complete
+    await Promise.all(uploadPromises);
+  };
+
+  // Delete an existing image
+  const deleteImage = async (imageId: number) => {
+    if (!confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+    
+    try {
+      const validToken = getValidToken();
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${recordId}/image/${imageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${validToken?.token || ''}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete image');
+      }
+      
+      // Refresh the images list
+      fetchRecord();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while deleting the image');
+      console.error('Error deleting image:', err);
+    }
+  };
+
+  // Render form fields based on entity
+  const renderFormFields = () => {
+    if (!record) return null;
+
+    return Object.keys(record).map(field => {
+      if (field === getPrimaryKeyField(entity) || field === 'IsDeleted' || 
+          field === 'RecordCreationTimeStamp' || field === 'RecordCreationLogin' ||
+          field === 'LastUpdationTimeStamp' || field === 'LastUpdationLogin') {
+        return null; // Skip primary key and audit fields
+      }
+
+      const isReferenceField = field in getReferenceFields(entity);
+      const referenceEntity = isReferenceField ? getReferenceFields(entity)[field] : null;
+
+      if (isReferenceField && referenceEntity && referenceData[referenceEntity]) {
+        return (
+          <div key={field} className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {field}
+            </label>
+            <select
+              value={formData[field] || ''}
+              onChange={(e) => handleFieldChange(field, parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select {field}</option>
+              {referenceData[referenceEntity].map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+
+      return (
+        <div key={field} className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {field}
+          </label>
+          <input
+            type={field.toLowerCase().includes('password') ? 'password' : 'text'}
+            value={formData[field] || ''}
+            onChange={(e) => handleFieldChange(field, e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      );
+    });
+  };
+
+  // Handle cancel button click
   const handleCancel = () => {
-    router.back();
+    router.push(`/admin-dashboard/manage-tables/${entity}`);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
-          <p>{error}</p>
-          <button
-            onClick={() => router.push(`/admin-dashboard/manage-tables/${entity}`)}
-            className="mt-2 text-sm underline text-red-700"
-          >
-            Go back to {getEntityDisplayName(entity)} list
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!record) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded max-w-md">
-          <p>Record not found</p>
-          <button
-            onClick={() => router.push(`/admin-dashboard/manage-tables/${entity}`)}
-            className="mt-2 text-sm underline text-yellow-700"
-          >
-            Go back to {getEntityDisplayName(entity)} list
-          </button>
-        </div>
+        <div className="text-xl">Loading...</div>
       </div>
     );
   }
@@ -266,71 +412,99 @@ const EntityEditPage = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">
-              Edit {getEntityDisplayName(entity)}
+            <h1 className="text-2xl font-bold text-gray-900">
+              Edit {getEntityDisplayName(entity)} - ID: {recordId}
             </h1>
           </div>
-          
+
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              <p>{error}</p>
+            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
             </div>
           )}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              {Object.keys(formData).map((field) => {
-                if (field === getPrimaryKeyField(entity) || 
-                    field === 'RecordCreationTimeStamp' || 
-                    field === 'RecordCreationLogin' || 
-                    field === 'LastUpdationTimeStamp' || 
-                    field === 'LastUpdationLogin' || 
-                    field === 'IsDeleted') {
-                  return null; // Skip primary key and audit fields
-                }
 
-                const referenceField = getReferenceFields(entity)[field];
+          <form onSubmit={handleSubmit}>
+            {/* Render standard form fields */}
+            {renderFormFields()}
+
+            {/* Image management section - only for product entity */}
+            {entity === 'product' && (
+              <div className="mt-8 p-6 border border-gray-200 rounded-lg">
+                <h2 className="text-xl font-semibold mb-4">Product Images</h2>
                 
-                return (
-                  <div key={field} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {field.replace(/([A-Z])/g, ' $1').trim()}:
-                    </label>
-                    
-                    {referenceField && referenceData[referenceField] ? (
-                      <select
-                        value={formData[field] || ''}
-                        onChange={(e) => handleFieldChange(field, e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                      >
-                        <option value="">Select {referenceField}</option>
-                        {referenceData[referenceField].map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={field.toLowerCase().includes('date') ? 'date' : 
-                              field.toLowerCase().includes('timestamp') ? 'datetime-local' :
-                              field.toLowerCase().includes('email') ? 'email' :
-                              field.toLowerCase().includes('mobile') || field.toLowerCase().includes('phone') ? 'tel' :
-                              field.toLowerCase().includes('password') ? 'password' :
-                              field.toLowerCase().includes('url') ? 'url' :
-                              field.toLowerCase().includes('price') || field.toLowerCase().includes('amount') || field.toLowerCase().includes('mrp') || field.toLowerCase().includes('gst') || field.toLowerCase().includes('discount') ? 'number' :
-                              'text'}
-                        value={formData[field] || ''}
-                        onChange={(e) => handleFieldChange(field, e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        placeholder={`Enter ${field.replace(/([A-Z])/g, ' $1').trim()}`}
-                      />
-                    )}
+                {/* Existing images */}
+                {existingImages.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-medium mb-2">Current Images</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {existingImages.map((image) => (
+                        <div key={image.ImageId} className="relative group">
+                          <img 
+                            src={`${process.env.NEXT_PUBLIC_BACKEND_URL}${image.ImagePath}`} 
+                            alt={`${image.ImageType} image`}
+                            className="w-full h-32 object-cover rounded border"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => deleteImage(image.ImageId)}
+                              className="text-red-400 hover:text-red-300 text-sm"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <p className="text-xs text-center mt-1">{image.ImageType}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-            
+                )}
+                
+                {/* New image uploads */}
+                <div className="space-y-4">
+                  {/* Thumbnail Image */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Replace Thumbnail Image (for listing view)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageChange('thumbnail', e.target.files?.[0] || null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Main Image */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Replace Main Image (for product detail view)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageChange('main', e.target.files?.[0] || null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Gallery Images */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Add Gallery Images (up to 3)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleImageChange('gallery', e.target.files || null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex space-x-4 mt-8">
               <button
                 type="button"

@@ -221,7 +221,7 @@ export function Navbar() {
             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <ShoppingBag className="text-white h-5 w-5" />
             </div>
-            <span className="font-bold text-xl hidden sm:inline-block">Onlinekart</span>
+            <span className="font-bold text-xl hidden sm:inline-block">Smart Kart</span>
           </Link>
 
           {/* Desktop Navigation */}

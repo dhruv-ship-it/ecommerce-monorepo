@@ -48,7 +48,7 @@ export default function HomePageRedirector() {
     <div className="min-h-screen bg-gray-50">
       <div className="flex items-center justify-center min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full text-center">
-          <div className="text-4xl font-extrabold text-gray-900 mb-2">EcomMGM</div>
+          <div className="text-4xl font-extrabold text-gray-900 mb-2">SmartKartMGM</div>
           <div className="text-xl text-gray-600 mt-4">Redirecting...</div>
         </div>
       </div>

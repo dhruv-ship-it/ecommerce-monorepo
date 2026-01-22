@@ -23,6 +23,12 @@ const EntityCreatePage = () => {
   const [referenceData, setReferenceData] = useState<ReferenceData>({});
   const [entityStructure, setEntityStructure] = useState<EntityRecord | null>(null);
 
+  // Image upload states
+  const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
+  const [mainImage, setMainImage] = useState<File | null>(null);
+  const [galleryImages, setGalleryImages] = useState<File[]>([]);
+  const [imageUploadProgress, setImageUploadProgress] = useState<{[key: string]: number}>({});
+
   // Get entity display name
   const getEntityDisplayName = (entityId: string): string => {
     const names: Record<string, string> = {
@@ -113,39 +119,23 @@ const EntityCreatePage = () => {
     return refs[entityId.toLowerCase()] || {};
   };
 
-  useEffect(() => {
-    // Validate authentication
-    const isValid = validateAuth();
-    const user = getUserFromToken();
-    
-    if (!isValid || !user || user.userType !== 'user' || user.role !== 'admin') {
-      router.push('/login');
-      return;
-    }
-
-    if (entity) {
-      fetchEntityStructure();
-    }
-  }, [entity, router]);
-
+  // Fetch entity structure and reference data
   const fetchEntityStructure = async () => {
     try {
+      // Validate authentication
+      const isValid = validateAuth();
+      const user = getUserFromToken();
+      
+      if (!isValid || !user || user.userType !== 'user' || user.role !== 'admin') {
+        router.push('/login');
+        return;
+      }
+
+      setLoading(true);
+      
       const validToken = getValidToken();
       
-      // First, fetch the entity structure by getting sample data
-      const sampleResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}?page=1&limit=1`, {
-        headers: {
-          'Authorization': `Bearer ${validToken?.token || ''}`
-        }
-      });
-      
-      let sampleData = [];
-      if (sampleResponse.ok) {
-        const sampleResult = await sampleResponse.json();
-        sampleData = sampleResult.records || [];
-      }
-      
-      // Fetch reference data
+      // Fetch reference data for dropdowns
       const referenceResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/references`, {
         headers: {
           'Authorization': `Bearer ${validToken?.token || ''}`
@@ -156,35 +146,71 @@ const EntityCreatePage = () => {
         throw new Error(`Failed to fetch reference data: ${referenceResponse.statusText}`);
       }
       
-      const referenceDataResult = await referenceResponse.json();
-      setReferenceData(referenceDataResult);
+      const referenceData = await referenceResponse.json();
+      setReferenceData(referenceData);
       
-      // Determine the structure based on sample data or use an empty object
-      const structure = sampleData.length > 0 ? sampleData[0] : {};
-      setEntityStructure(structure);
-      
-      // Initialize form data with empty values for non-primary key fields
-      const initialFormData: EntityRecord = {};
-      Object.keys(structure).forEach(key => {
-        if (key !== getPrimaryKeyField(entity) && 
-            key !== 'RecordCreationTimeStamp' && 
-            key !== 'RecordCreationLogin' && 
-            key !== 'LastUpdationTimeStamp' && 
-            key !== 'LastUpdationLogin' && 
-            key !== 'IsDeleted') {
-          initialFormData[key] = '';
+      // Get field information from the schema in reference data
+      if (referenceData.schema) {
+        setEntityStructure({ fields: referenceData.schema });
+      } else {
+        // If schema is not in reference data, try to get it from the structure endpoint
+        try {
+          const structureResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}/structure`, {
+            headers: {
+              'Authorization': `Bearer ${validToken?.token || ''}`
+            }
+          });
+          
+          if (structureResponse.ok) {
+            const structureData = await structureResponse.json();
+            setEntityStructure(structureData);
+          }
+        } catch (structureErr) {
+          console.warn('Structure endpoint not available, using fallback:', structureErr);
+          // As a last resort, try to get a sample record to understand the structure
+          try {
+            // Get the first record to understand the fields
+            const sampleResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}?limit=1&page=1`, {
+              headers: {
+                'Authorization': `Bearer ${validToken?.token || ''}`
+              }
+            });
+            
+            if (sampleResponse.ok) {
+              const sampleData = await sampleResponse.json();
+              if (sampleData.records && sampleData.records.length > 0) {
+                // Create a basic schema from the first record
+                const basicSchema: { [key: string]: any } = {};
+                Object.keys(sampleData.records[0]).forEach(key => {
+                  basicSchema[key] = { dataType: 'varchar' }; // Default type
+                });
+                setEntityStructure({ fields: basicSchema });
+              } else {
+                // If no records exist, we'll have to create a minimal structure
+                setEntityStructure({ fields: {} });
+              }
+            }
+          } catch (sampleErr) {
+            console.warn('Sample record approach also failed:', sampleErr);
+            setEntityStructure({ fields: {} });
+          }
         }
-      });
-      
-      setFormData(initialFormData);
-      setLoading(false);
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred while fetching entity structure');
       console.error('Error fetching entity structure:', err);
+    } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (entity) {
+      fetchEntityStructure();
+    }
+  }, [entity]);
+
+  // Handle form field changes
   const handleFieldChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -192,24 +218,49 @@ const EntityCreatePage = () => {
     }));
   };
 
+  // Handle image file selection
+  const handleImageChange = (type: 'thumbnail' | 'main' | 'gallery', file: File | FileList | null) => {
+    if (type === 'gallery' && file instanceof FileList) {
+      const filesArray = Array.from(file);
+      // Limit to 3 gallery images
+      setGalleryImages(filesArray.slice(0, 3));
+    } else if (file instanceof File) {
+      if (type === 'thumbnail') {
+        setThumbnailImage(file);
+      } else if (type === 'main') {
+        setMainImage(file);
+      }
+    }
+  };
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       const validToken = getValidToken();
       
+      // First, create the product record
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin-tables/${entity}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${validToken?.token || ''}`,
+          'Authorization': `Bearer ${validToken?.token || ''}`
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(formData)
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to create record');
+      }
+
+      const newRecord = await response.json();
+      const productId = newRecord[getPrimaryKeyField(entity)];
+      
+      // If this is a product entity and images were uploaded, upload them
+      if (entity === 'product' && productId) {
+        await uploadProductImages(productId);
       }
 
       // Redirect back to the entity list
@@ -220,33 +271,151 @@ const EntityCreatePage = () => {
     }
   };
 
-  const handleCancel = () => {
-    router.push(`/admin-dashboard/manage-tables/${entity}`);
+  // Upload product images after product creation
+  const uploadProductImages = async (productId: number) => {
+    const uploadPromises = [];
+    
+    // Upload thumbnail if selected
+    if (thumbnailImage) {
+      const formData = new FormData();
+      formData.append('image', thumbnailImage);
+      formData.append('imageType', 'thumbnail');
+      formData.append('productId', productId.toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Upload main image if selected
+    if (mainImage) {
+      const formData = new FormData();
+      formData.append('image', mainImage);
+      formData.append('imageType', 'main');
+      formData.append('productId', productId.toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Upload gallery images if selected
+    for (let i = 0; i < galleryImages.length; i++) {
+      const formData = new FormData();
+      formData.append('image', galleryImages[i]);
+      formData.append('imageType', 'gallery');
+      formData.append('galleryIndex', (i + 1).toString());
+      formData.append('productId', productId.toString());
+      formData.append('imageOrder', (i + 1).toString());
+      
+      uploadPromises.push(
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/product-images/product/${productId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getValidToken()?.token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+    
+    // Wait for all uploads to complete
+    await Promise.all(uploadPromises);
+  };
+
+  // Render form fields based on entity
+  const renderFormFields = () => {
+    if (!referenceData) return null;
+
+    // Try to get fields from structure, or fall back to getting them from reference data
+    let fields = {};
+    if (entityStructure && entityStructure.fields) {
+      fields = entityStructure.fields;
+    } else {
+      // Try to infer fields from the reference data if structure is not available
+      // For this, we'd need to make a sample request to get the fields
+      // For now, we'll use a different approach - try to get a single record to infer fields
+      // But for new records, we'll just return null if no structure is available
+      // This shouldn't happen if our fallback in fetchEntityStructure works
+    }
+    
+    const fieldNames = Object.keys(fields);
+    
+    // If we still don't have field names, try to infer from referenceData
+    if (fieldNames.length === 0) {
+      // For now, just return null if we can't get the fields
+      // In a real implementation, we might want to fetch a sample record to infer fields
+      return (
+        <div className="mb-4">
+          <p className="text-red-500">Unable to load form fields. Please try refreshing the page.</p>
+        </div>
+      );
+    }
+    
+    return fieldNames.map(field => {
+      if (field === getPrimaryKeyField(entity) || field === 'IsDeleted' || 
+          field === 'RecordCreationTimeStamp' || field === 'RecordCreationLogin' ||
+          field === 'LastUpdationTimeStamp' || field === 'LastUpdationLogin') {
+        return null; // Skip primary key and audit fields
+      }
+
+      const isReferenceField = field in getReferenceFields(entity);
+      const referenceEntity = isReferenceField ? getReferenceFields(entity)[field] : null;
+
+      if (isReferenceField && referenceEntity && referenceData[referenceEntity]) {
+        return (
+          <div key={field} className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {field}
+            </label>
+            <select
+              value={formData[field] || ''}
+              onChange={(e) => handleFieldChange(field, parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select {field}</option>
+              {referenceData[referenceEntity].map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+
+      return (
+        <div key={field} className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {field}
+          </label>
+          <input
+            type={field.toLowerCase().includes('password') ? 'password' : 'text'}
+            value={formData[field] || ''}
+            onChange={(e) => handleFieldChange(field, e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      );
+    });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
-          <p>{error}</p>
-          <button
-            onClick={() => router.push(`/admin-dashboard/manage-tables/${entity}`)}
-            className="mt-2 text-sm underline text-red-700"
-          >
-            Go back to {getEntityDisplayName(entity)} list
-          </button>
-        </div>
+        <div className="text-xl">Loading...</div>
       </div>
     );
   }
@@ -256,81 +425,72 @@ const EntityCreatePage = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900">
               Add New {getEntityDisplayName(entity)}
             </h1>
           </div>
-          
+
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              <p>{error}</p>
+            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
             </div>
           )}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              {entityStructure && Object.keys(entityStructure).length > 0 ? (
-                Object.keys(entityStructure).map((field) => {
-                  if (field === getPrimaryKeyField(entity) || 
-                      field === 'RecordCreationTimeStamp' || 
-                      field === 'RecordCreationLogin' || 
-                      field === 'LastUpdationTimeStamp' || 
-                      field === 'LastUpdationLogin' || 
-                      field === 'IsDeleted') {
-                    return null; // Skip primary key and audit fields
-                  }
 
-                  const referenceField = getReferenceFields(entity)[field];
-                  
-                  return (
-                    <div key={field} className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {field.replace(/([A-Z])/g, ' $1').trim()}:
-                      </label>
-                      
-                      {referenceField && referenceData[referenceField] ? (
-                        <select
-                          value={formData[field] || ''}
-                          onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
-                        >
-                          <option value="">Select {referenceField}</option>
-                          {referenceData[referenceField].map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={field.toLowerCase().includes('date') ? 'date' : 
-                                field.toLowerCase().includes('timestamp') ? 'datetime-local' :
-                                field.toLowerCase().includes('email') ? 'email' :
-                                field.toLowerCase().includes('mobile') || field.toLowerCase().includes('phone') ? 'tel' :
-                                field.toLowerCase().includes('password') ? 'password' :
-                                field.toLowerCase().includes('url') ? 'url' :
-                                field.toLowerCase().includes('price') || field.toLowerCase().includes('amount') || field.toLowerCase().includes('mrp') || field.toLowerCase().includes('gst') || field.toLowerCase().includes('discount') ? 'number' :
-                                'text'}
-                          value={formData[field] || ''}
-                          onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md"
-                          placeholder={`Enter ${field.replace(/([A-Z])/g, ' $1').trim()}`}
-                        />
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  Loading entity structure...
+          <form onSubmit={handleSubmit}>
+            {/* Render standard form fields */}
+            {renderFormFields()}
+
+            {/* Image upload section - only for product entity */}
+            {entity === 'product' && (
+              <div className="mt-8 p-6 border border-gray-200 rounded-lg">
+                <h2 className="text-xl font-semibold mb-4">Product Images</h2>
+                
+                {/* Thumbnail Image */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Thumbnail Image (for listing view)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageChange('thumbnail', e.target.files?.[0] || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-              )}
-            </div>
-            
-            <div className="flex space-x-4 mt-8">
+
+                {/* Main Image */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Main Image (for product detail view)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageChange('main', e.target.files?.[0] || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Gallery Images */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gallery Images (up to 3)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleImageChange('gallery', e.target.files || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-4 mt-8">
               <button
                 type="button"
-                onClick={handleCancel}
+                onClick={() => router.push(`/admin-dashboard/manage-tables/${entity}`)}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 Cancel

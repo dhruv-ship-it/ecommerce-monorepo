@@ -9,8 +9,8 @@ import ClientSessionProvider from '@/components/ClientSessionProvider';
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "E-Commerce Store",
-  description: "Amazon-style e-commerce application",
+  title: "Smart Kart",
+  description: "Smartkart e-commerce application",
   generator: 'v0.dev',
   icons: {
     icon: '/favicon.ico',

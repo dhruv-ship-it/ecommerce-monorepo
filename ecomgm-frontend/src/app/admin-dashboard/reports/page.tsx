@@ -273,7 +273,7 @@ export default function ReportsPage() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomGM - Admin Dashboard - Reports
+                SmartKartMGM - Admin Dashboard - Reports
               </h1>
             </div>
             <div className="flex items-center">

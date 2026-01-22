@@ -731,6 +731,36 @@ router.post('/:entity', adminOnlyMiddleware, async (req, res) => {
   }
 });
 
+// Get entity structure (fields and schema)
+router.get('/:entity/structure', adminOnlyMiddleware, async (req, res) => {
+  try {
+    const entity = req.params.entity;
+    const tableName = getTableName(entity);
+    
+    if (!tableName) {
+      return res.status(400).json({ error: 'Invalid entity type' });
+    }
+
+    let conn;
+    try {
+      conn = await db.getConnection();
+      
+      // Get table schema information
+      const tableSchema = await getTableSchema(tableName, conn);
+      
+      // Return the schema information
+      res.json({
+        fields: tableSchema
+      });
+    } finally {
+      if (conn) conn.release();
+    }
+  } catch (err) {
+    console.error(`Error fetching structure for ${req.params.entity}:`, err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Helper function to validate input and apply defaults
 async function validateAndApplyDefaults(inputData, tableSchema, tableName, conn) {
   const validatedData = { ...inputData };

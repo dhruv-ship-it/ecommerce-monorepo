@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EcomGM - Admin Portal",
-  description: "E-commerce Management System",
+  title: "SmartKartMGM - Admin Portal",
+  description: "Smartkart Management System",
   icons: {
     icon: '/favicon.ico',
   },

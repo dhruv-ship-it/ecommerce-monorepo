@@ -280,7 +280,7 @@ export default function SUDashboard() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomMGM - SU Dashboard
+                SmartKartMGM - SU Dashboard
               </h1>
             </div>
             <div className="flex items-center space-x-4">

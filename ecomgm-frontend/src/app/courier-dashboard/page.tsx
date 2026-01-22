@@ -106,7 +106,7 @@ export default function CourierDashboard() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                EcomMGM - Courier Dashboard
+                SmartKartMGM - Courier Dashboard
               </h1>
             </div>
             <div className="flex items-center space-x-4">

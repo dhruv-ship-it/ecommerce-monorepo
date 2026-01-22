@@ -9,7 +9,7 @@ export default function HomePage() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center max-w-4xl mx-auto">
           <h1 className="text-6xl font-bold text-gray-900 mb-6">
-            Welcome to <span className="text-blue-600">Onlinekart</span>
+            Welcome to <span className="text-blue-600">Smart Kart</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 leading-relaxed">
             Discover the perfect products for every occasion. From electronics to fashion, 
