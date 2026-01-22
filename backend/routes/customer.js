@@ -27,7 +27,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
   try {
     const conn = await db.getConnection();
-    const [customer] = await conn.query('SELECT CustomerId, Customer, CustomerEmail, CustomerMobile, Gender, DoB, Address, CustomerPIN FROM customer WHERE CustomerId = ?', [req.user.id]);
+    const [customer] = await conn.query('SELECT CustomerId, Customer, CustomerEmail, CustomerMobile, Gender, DoB, Address, CustomerPIN, Locality, CustomerRank, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted, RecordCreationTimeStamp, LastUpdationTimeStamp FROM customer WHERE CustomerId = ?', [req.user.id]);
     conn.release();
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
     res.json({ customer });
@@ -39,8 +39,8 @@ router.get('/profile', authMiddleware, async (req, res) => {
 // Update customer profile
 router.put('/profile', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
-  const { name, email, mobile, gender, dob, address, profile_image } = req.body;
-  if (!name && !email && !mobile && !gender && !dob && !address && !profile_image) return res.status(400).json({ error: 'No fields to update' });
+  const { name, email, mobile, gender, dob, address, pin, locality, rank } = req.body;
+  if (!name && !email && !mobile && !gender && !dob && !address && !pin && !locality && !rank) return res.status(400).json({ error: 'No fields to update' });
   try {
     const conn = await db.getConnection();
     if (email) {
@@ -51,9 +51,17 @@ router.put('/profile', authMiddleware, async (req, res) => {
         return res.status(400).json({ error: 'Email already in use' });
       }
     }
+    if (mobile) {
+      // Check if mobile is taken by another customer
+      const [existing] = await conn.query('SELECT CustomerId FROM customer WHERE CustomerMobile = ? AND CustomerId != ?', [mobile, req.user.id]);
+      if (existing) {
+        conn.release();
+        return res.status(400).json({ error: 'Mobile already in use' });
+      }
+    }
     await conn.query(
-      'UPDATE customer SET CustomerName = COALESCE(?, CustomerName), CustomerEmail = COALESCE(?, CustomerEmail), CustomerMobile = COALESCE(?, CustomerMobile), CustomerGender = COALESCE(?, CustomerGender), CustomerDoB = COALESCE(?, CustomerDoB), CustomerAddress = COALESCE(?, CustomerAddress), ProfileImage = COALESCE(?, ProfileImage) WHERE CustomerId = ?',
-      [name, email, mobile, gender, dob, address, profile_image, req.user.id]
+      'UPDATE customer SET Customer = COALESCE(?, Customer), CustomerEmail = COALESCE(?, CustomerEmail), CustomerMobile = COALESCE(?, CustomerMobile), Gender = COALESCE(?, Gender), DoB = COALESCE(?, DoB), Address = COALESCE(?, Address), CustomerPIN = COALESCE(?, CustomerPIN), Locality = COALESCE(?, Locality), CustomerRank = COALESCE(?, CustomerRank) WHERE CustomerId = ?',
+      [name, email, mobile, gender, dob, address, pin, locality, rank, req.user.id]
     );
     conn.release();
     res.json({ message: 'Profile updated' });

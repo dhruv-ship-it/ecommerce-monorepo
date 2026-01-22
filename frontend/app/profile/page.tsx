@@ -55,7 +55,8 @@ export default function ProfilePage() {
   }, []);
 
   // Customer edit form
-  const editForm = useForm({ defaultValues: { name: '', gender: '', mobile: '', email: '', address: '', dob: '', pin: '' } });
+  const [localities, setLocalities] = useState<any[]>([]);
+  const editForm = useForm({ defaultValues: { name: '', gender: '', mobile: '', email: '', address: '', dob: '', pin: '', locality: 0, rank: 0 } });
   useEffect(() => {
     if (profile && role === 'customer') {
       editForm.reset({
@@ -66,9 +67,26 @@ export default function ProfilePage() {
         address: profile.Address,
         dob: profile.DoB,
         pin: profile.CustomerPIN,
+        locality: profile.Locality || 0,
+        rank: profile.CustomerRank || 0,
       });
     }
+    
+    // Fetch localities
+    fetchLocalities();
   }, [profile, role]);
+  
+  const fetchLocalities = async () => {
+    try {
+      const response = await fetch(`${API}/api/localities`);
+      if (response.ok) {
+        const data = await response.json();
+        setLocalities(Array.isArray(data.localities) ? data.localities : []);
+      }
+    } catch (err) {
+      console.error("Error fetching localities:", err);
+    }
+  };
   async function handleEdit(data: any) {
     try {
       const token = localStorage.getItem('token');
@@ -83,6 +101,8 @@ export default function ProfilePage() {
           address: data.address,
           dob: data.dob,
           pin: data.pin,
+          locality: data.locality,
+          rank: data.rank,
         }),
       });
       const json = await res.json();
@@ -97,6 +117,8 @@ export default function ProfilePage() {
           Address: data.address,
           DoB: data.dob,
           CustomerPIN: data.pin,
+          Locality: data.locality,
+          CustomerRank: data.rank,
         }});
       } else {
         toast({ title: 'Error', description: json.error, variant: 'destructive' });
@@ -200,6 +222,8 @@ export default function ProfilePage() {
                 <div><b>Address:</b> {profile.Address}</div>
                 <div><b>Date of Birth:</b> {profile.DoB}</div>
                 <div><b>PIN:</b> {profile.CustomerPIN}</div>
+                <div><b>Locality:</b> {profile.Locality}</div>
+                <div><b>Rank:</b> {profile.CustomerRank}</div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditOpen(true)}>
@@ -272,6 +296,29 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>PIN</FormLabel>
                       <FormControl><Input {...field} required minLength={4} maxLength={10} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="locality" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Locality</FormLabel>
+                      <FormControl>
+                        <select {...field} value={field.value} onChange={field.onChange} className="w-full border rounded p-2">
+                          <option value="0">Select Locality</option>
+                          {localities.map(locality => (
+                            <option key={locality.LocalityId} value={locality.LocalityId}>
+                              {locality.Locality}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={editForm.control} name="rank" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rank</FormLabel>
+                      <FormControl><Input type="number" {...field} min="0" max="99" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

@@ -817,3 +817,70 @@ MariaDB [ecomv1]> select * from product_images;
 |      60 |        12 | gallery   | /static/images/products/fossil-gen5-watch-white/gallery/3.jpg      |          5 | Y        |           | 2025-09-02 03:53:00     | ADMIN               | 2025-09-02 03:53:00   | ADMIN             |
 +---------+-----------+-----------+--------------------------------------------------------------------+------------+----------+-----------+-------------------------+---------------------+-----------------------+-------------------+
 60 rows in set (0.001 sec)
+MariaDB [ecomv1]> desc customer;
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type            | Null | Key | Default             | Extra                         |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| CustomerId              | int(8) unsigned | NO   | PRI | NULL                | auto_increment                |
+| Customer                | varchar(50)     | NO   | UNI | NULL                |                               |
+| Gender                  | char(1)         | NO   |     |                     |                               |
+| CustomerMobile          | varchar(10)     | NO   | UNI |                     |                               |
+| CustomerEmail           | varchar(50)     | NO   | UNI |                     |                               |
+| CustomerPIN             | varchar(10)     | NO   |     |                     |                               |
+| Locality                | int(8)          | YES  |     | 0                   |                               |
+| DoB                     | date            | NO   |     | 0000-00-00          |                               |
+| CustomerRank            | int(2)          | NO   |     | 0                   |                               |
+| Passwd                  | varchar(255)    | NO   |     |                     |                               |
+| Address                 | varchar(50)     | NO   |     |                     |                               |
+| IsVerified              | char(1)         | NO   |     |                     |                               |
+| VerificationTimeStamp   | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsActivated             | char(1)         | NO   |     |                     |                               |
+| ActivationTimeStamp     | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsBlackListed           | char(1)         | NO   |     |                     |                               |
+| BlackListTimeStamp      | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsDead                  | char(1)         | NO   |     |                     |                               |
+| DeadTimeStamp           | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsDeleted               | char(1)         | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime        | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)     | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime        | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)     | NO   |     |                     |                               |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+24 rows in set (0.035 sec)
+
+MariaDB [ecomv1]> desc user;
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type            | Null | Key | Default             | Extra                         |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| UserId                  | int(8) unsigned | NO   | PRI | NULL                | auto_increment                |
+| User                    | varchar(50)     | NO   | UNI | NULL                |                               |
+| Gender                  | char(1)         | NO   |     |                     |                               |
+| UserMobile              | varchar(10)     | NO   | UNI |                     |                               |
+| UserEmail               | varchar(50)     | NO   | UNI |                     |                               |
+| PIN                     | varchar(10)     | NO   |     |                     |                               |
+| Locality                | int(8)          | YES  |     | 0                   |                               |
+| DoB                     | date            | NO   |     | 0000-00-00          |                               |
+| UserRank                | int(2)          | NO   |     | 0                   |                               |
+| Passwd                  | varchar(255)    | NO   |     |                     |                               |
+| Address                 | varchar(50)     | NO   |     |                     |                               |
+| IsSU                    | char(1)         | NO   |     |                     |                               |
+| IsAdmin                 | char(1)         | NO   |     |                     |                               |
+| IsVendor                | char(1)         | NO   |     |                     |                               |
+| IsCourier               | char(1)         | NO   |     |                     |                               |
+| IsVerified              | char(1)         | NO   |     |                     |                               |
+| VerificationTimeStamp   | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsActivated             | char(1)         | NO   |     |                     |                               |
+| ActivationTimeStamp     | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsBlackListed           | char(1)         | NO   |     |                     |                               |
+| BlackListTimeStamp      | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsDead                  | char(1)         | NO   |     |                     |                               |
+| DeadTimeStamp           | datetime        | NO   |     | 0000-00-00 00:00:00 |                               |
+| IsDeleted               | char(1)         | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime        | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)     | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime        | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)     | NO   |     |                     |                               |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+28 rows in set (0.019 sec)
+
+MariaDB [ecomv1]>

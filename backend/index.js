@@ -21,6 +21,7 @@ import customerRouter from './routes/customer.js';
 import archiveRouter from './routes/archive.js';
 import adminTablesRouter from './routes/admin-tables.js';
 import productImagesRouter from './routes/product-images.js';  // Add this line
+import generalRouter from './routes/general.js';  // Add general routes
 
 // Get the current filename and directory for ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -244,6 +245,7 @@ app.use('/models', modelRouter);
 app.use('/admin-tables', userTokenMiddleware, adminRoleMiddleware, adminTablesRouter);
 app.use('/archive', suTokenMiddleware, archiveRouter);
 app.use('/product-images', userTokenMiddleware, adminRoleMiddleware, productImagesRouter); // Add this line
+app.use('/api', generalRouter); // Add general API routes
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

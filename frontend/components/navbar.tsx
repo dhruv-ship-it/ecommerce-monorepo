@@ -115,10 +115,30 @@ export function Navbar() {
   const [signInLoading, setSignInLoading] = useReactState(false);
 
   // Sign Up form state
-  const signUpForm = useForm({ defaultValues: { name: '', gender: '', mobile: '', email: '', password: '', address: '', dob: '', pin: '' } });
+  const signUpForm = useForm({ defaultValues: { name: '', gender: '', mobile: '', email: '', password: '', address: '', dob: '', pin: '', locality: 0 } });
   const [signUpError, setSignUpError] = useReactState('');
   const [signUpSuccess, setSignUpSuccess] = useReactState('');
   const [signUpLoading, setSignUpLoading] = useReactState(false);
+  const [localities, setLocalities] = useState<{id: number, name: string}[]>([]);
+  
+  useEffect(() => {
+    // Fetch localities when the sign-up modal is opened
+    if (openSignUp) {
+      fetchLocalities();
+    }
+  }, [openSignUp]);
+  
+  const fetchLocalities = async () => {
+    try {
+      const response = await fetch(`${API}/api/localities`);
+      if (response.ok) {
+        const data = await response.json();
+        setLocalities(Array.isArray(data.localities) ? data.localities : []);
+      }
+    } catch (err) {
+      console.error('Error fetching localities:', err);
+    }
+  };
 
   async function handleSignIn(data: any) {
     setSignInLoading(true);
@@ -166,6 +186,7 @@ export function Navbar() {
           address: data.address,
           dob: data.dob,
           pin: data.pin,
+          locality: data.locality,
         }),
       });
       const json = await res.json();
@@ -477,6 +498,31 @@ export function Navbar() {
                     <FormLabel>PIN</FormLabel>
                     <FormControl>
                       <Input type="text" placeholder="Enter a PIN (e.g. 1234)" {...field} required minLength={4} maxLength={10} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={signUpForm.control}
+                name="locality"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Locality</FormLabel>
+                    <FormControl>
+                      <select 
+                        {...field} 
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        className="w-full border rounded p-2"
+                      >
+                        <option value="0">Select Locality</option>
+                        {localities.map(locality => (
+                          <option key={locality.id} value={locality.id}>
+                            {locality.name}
+                          </option>
+                        ))}
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

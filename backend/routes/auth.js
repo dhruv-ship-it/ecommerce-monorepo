@@ -182,24 +182,24 @@ router.post('/su-login', async (req, res) => {
 
 // Customer Signup
 router.post('/signup', async (req, res) => {
-  const { name, gender, mobile, email, password, address, dob, pin } = req.body;
+  const { name, gender, mobile, email, password, address, dob, pin, locality } = req.body;
   if (!name || !gender || !mobile || !email || !password || !address || !dob || !pin) return res.status(400).json({ error: 'Missing fields' });
   let conn;
   try {
     conn = await db.getConnection();
     console.log('DB connection acquired for signup');
-    const [existing] = await conn.query('SELECT CustomerId FROM Customer WHERE CustomerEmail = ?', [email]);
+    const [existing] = await conn.query('SELECT CustomerId FROM Customer WHERE CustomerEmail = ? OR CustomerMobile = ?', [email, mobile]);
     if (existing) {
       conn.release();
       console.log('DB connection released (signup, already exists)');
-      return res.status(400).json({ error: 'Customer already exists' });
+      return res.status(400).json({ error: 'Customer with this email or mobile already exists' });
     }
     const hashed = await bcrypt.hash(password, 10);
     await conn.query(
       `INSERT INTO Customer 
-        (Customer, Gender, CustomerMobile, CustomerEmail, CustomerPIN, DoB, Passwd, Address, RecordCreationLogin, LastUpdationLogin) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, gender, mobile, email, pin, dob, hashed, address, name.substring(0, 10), name.substring(0, 10)]
+        (Customer, Gender, CustomerMobile, CustomerEmail, CustomerPIN, Locality, DoB, Passwd, Address, IsVerified, IsActivated, RecordCreationLogin, LastUpdationLogin) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+      [name, gender, mobile, email, pin, locality || 0, dob, hashed, address, 'N', 'Y', name.substring(0, 10), name.substring(0, 10)]
     );
     conn.release();
     console.log('DB connection released (signup, success)');
