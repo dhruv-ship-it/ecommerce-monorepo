@@ -383,7 +383,7 @@ const EntityCreatePage = () => {
             <select
               value={formData[field] || ''}
               onChange={(e) => handleFieldChange(field, parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
             >
               <option value="">Select {field}</option>
               {referenceData[referenceEntity].map(item => (
@@ -405,7 +405,7 @@ const EntityCreatePage = () => {
             type={field.toLowerCase().includes('password') ? 'password' : 'text'}
             value={formData[field] || ''}
             onChange={(e) => handleFieldChange(field, e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
           />
         </div>
       );
@@ -454,7 +454,7 @@ const EntityCreatePage = () => {
                     type="file"
                     accept="image/*"
                     onChange={(e) => handleImageChange('thumbnail', e.target.files?.[0] || null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                   />
                 </div>
 
@@ -467,7 +467,7 @@ const EntityCreatePage = () => {
                     type="file"
                     accept="image/*"
                     onChange={(e) => handleImageChange('main', e.target.files?.[0] || null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                   />
                 </div>
 
@@ -481,7 +481,7 @@ const EntityCreatePage = () => {
                     accept="image/*"
                     multiple
                     onChange={(e) => handleImageChange('gallery', e.target.files || null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                   />
                 </div>
               </div>

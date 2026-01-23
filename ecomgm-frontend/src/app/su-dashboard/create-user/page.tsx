@@ -128,7 +128,7 @@ export default function CreateUserPage() {
                       type="text"
                       value={createData.name}
                       onChange={(e) => setCreateData({ ...createData, name: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -137,7 +137,7 @@ export default function CreateUserPage() {
                     <select
                       value={createData.gender}
                       onChange={(e) => setCreateData({ ...createData, gender: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     >
                       <option value="">Select Gender</option>
@@ -152,7 +152,7 @@ export default function CreateUserPage() {
                       type="text"
                       value={createData.mobile}
                       onChange={(e) => setCreateData({ ...createData, mobile: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -162,7 +162,7 @@ export default function CreateUserPage() {
                       type="email"
                       value={createData.email}
                       onChange={(e) => setCreateData({ ...createData, email: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -172,7 +172,7 @@ export default function CreateUserPage() {
                       type="text"
                       value={createData.pin}
                       onChange={(e) => setCreateData({ ...createData, pin: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -182,7 +182,7 @@ export default function CreateUserPage() {
                       type="date"
                       value={createData.dob}
                       onChange={(e) => setCreateData({ ...createData, dob: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -192,7 +192,7 @@ export default function CreateUserPage() {
                       type="text"
                       value={createData.address}
                       onChange={(e) => setCreateData({ ...createData, address: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -218,7 +218,7 @@ export default function CreateUserPage() {
                       type="number"
                       value={createData.rank}
                       onChange={(e) => setCreateData({ ...createData, rank: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     />
                   </div>
                   <div>
@@ -227,7 +227,7 @@ export default function CreateUserPage() {
                       type="password"
                       value={createData.password}
                       onChange={(e) => setCreateData({ ...createData, password: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -236,7 +236,7 @@ export default function CreateUserPage() {
                     <select
                       value={createData.role}
                       onChange={(e) => setCreateData({ ...createData, role: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="admin">Admin</option>
                       <option value="vendor">Vendor</option>
@@ -248,7 +248,7 @@ export default function CreateUserPage() {
                     <select
                       value={createData.isVerified}
                       onChange={(e) => setCreateData({ ...createData, isVerified: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="Y">Yes</option>
                       <option value="">No</option>
@@ -259,7 +259,7 @@ export default function CreateUserPage() {
                     <select
                       value={createData.isActivated}
                       onChange={(e) => setCreateData({ ...createData, isActivated: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="Y">Yes</option>
                       <option value="">No</option>

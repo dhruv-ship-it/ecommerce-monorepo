@@ -314,7 +314,7 @@ export default function EditUserPage() {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -324,7 +324,7 @@ export default function EditUserPage() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -334,7 +334,7 @@ export default function EditUserPage() {
                       type="text"
                       value={formData.mobile}
                       onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -344,7 +344,7 @@ export default function EditUserPage() {
                       type="text"
                       value={formData.pin}
                       onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       required
                     />
                   </div>
@@ -353,7 +353,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.gender}
                       onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Select Gender</option>
                       <option value="M">Male</option>
@@ -367,7 +367,7 @@ export default function EditUserPage() {
                       type="date"
                       value={formData.dob}
                       onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     />
                   </div>
                   <div>
@@ -392,7 +392,7 @@ export default function EditUserPage() {
                       type="number"
                       value={formData.rank}
                       onChange={(e) => setFormData({ ...formData, rank: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -401,7 +401,7 @@ export default function EditUserPage() {
                       type="text"
                       value={formData.address}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     />
                   </div>
                 </div>
@@ -415,7 +415,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.RecordCreationTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -424,7 +424,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.RecordCreationLogin || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -433,7 +433,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.LastUpdationTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -442,7 +442,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.LastUpdationLogin || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -451,7 +451,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.VerificationTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -460,7 +460,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.ActivationTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -469,7 +469,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.BlackListTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                     <div>
@@ -478,7 +478,7 @@ export default function EditUserPage() {
                         type="text"
                         value={user?.DeadTimeStamp || ''}
                         readOnly
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-900"
                       />
                     </div>
                   </div>
@@ -490,7 +490,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isSU}
                       onChange={(e) => setFormData({ ...formData, isSU: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -502,7 +502,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isAdmin}
                       onChange={(e) => setFormData({ ...formData, isAdmin: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -514,7 +514,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isVendor}
                       onChange={(e) => setFormData({ ...formData, isVendor: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -526,7 +526,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isCourier}
                       onChange={(e) => setFormData({ ...formData, isCourier: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -538,7 +538,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isVerified}
                       onChange={(e) => setFormData({ ...formData, isVerified: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -550,7 +550,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isActivated}
                       onChange={(e) => setFormData({ ...formData, isActivated: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -562,7 +562,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isBlackListed}
                       onChange={(e) => setFormData({ ...formData, isBlackListed: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
@@ -574,7 +574,7 @@ export default function EditUserPage() {
                     <select
                       value={formData.isDead}
                       onChange={(e) => setFormData({ ...formData, isDead: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                     >
                       <option value="">Unset</option>
                       <option value="Y">Yes</option>
