@@ -969,7 +969,7 @@ router.get('/order/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) 
       '  ELSE "Courier Assigned" ' +
       'END as CourierAcceptanceStatus, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
-      'c.Customer, c.CustomerEmail, c.CustomerMobile, c.Address as CustomerAddress, c.Locality, ' +
+      'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
       'COALESCE(u.User, default_u.User) as CourierName, COALESCE(u.UserMobile, default_u.UserMobile) as CourierMobile, ' +
       '"Active" as OrderCategory ' +
       'FROM VendorProductCustomerCourier vpc ' +
@@ -1029,7 +1029,7 @@ router.get('/order/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) 
         '  ELSE "Courier Assigned" ' +
         'END as CourierAcceptanceStatus, ' +
         'pr.Product, pr.MRP as ProductPrice, ' +
-        'c.Customer, c.CustomerEmail, c.CustomerMobile, c.Address as CustomerAddress, c.Locality, ' +
+        'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
         'u.User as CourierName, u.UserMobile as CourierMobile, ' +
         '"Archived" as OrderCategory ' +
         'FROM vendorproductcustomercourier_arch vpc_arch ' +
@@ -1068,9 +1068,7 @@ router.get('/order/:id', authMiddleware, vendorOnlyMiddleware, async (req, res) 
   } finally {
     if (conn) conn.release();
   }
-});
-
-// Get customer address hierarchy
+});// Get address hierarchy by locality ID
 router.get('/customer/address-hierarchy/:localityId', authMiddleware, vendorOnlyMiddleware, async (req, res) => {
   try {
     const { localityId } = req.params;
@@ -1162,5 +1160,6 @@ router.get('/customer/address-hierarchy/:localityId', authMiddleware, vendorOnly
     res.status(500).json({ error: 'Server error' });
   }
 });
+
 
 export default router;

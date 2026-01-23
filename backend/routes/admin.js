@@ -22,9 +22,72 @@ function adminOnlyMiddleware(req, res, next) {
   return res.status(403).json({ error: 'Forbidden' });
 }
 
+// View all users
+router.get('/users', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const conn = await db.getConnection();
+    const users = await conn.query('SELECT UserId, User, UserEmail, Gender, UserMobile, PIN, Locality, DoB, UserRank, Address, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted FROM User');
+    conn.release();
+    res.json({ users });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get a specific user by ID
+router.get('/user/:id', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const conn = await db.getConnection();
+    const [user] = await conn.query(
+      'SELECT UserId, User, UserEmail, UserMobile, Gender, PIN, Locality, DoB, UserRank, Passwd, Address, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, VerificationTimeStamp, IsActivated, ActivationTimeStamp, IsBlackListed, BlackListTimeStamp, IsDead, DeadTimeStamp, IsDeleted, RecordCreationTimeStamp, RecordCreationLogin, LastUpdationTimeStamp, LastUpdationLogin FROM User WHERE UserId = ?',
+      [userId]
+    );
+    console.log('Fetching user with ID:', userId, 'Result:', user);
+    conn.release();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    // Use JSON.stringify with a replacer to convert all BigInts to numbers
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(user, (key, value) =>
+      typeof value === 'bigint' ? Number(value) : value
+    ));
+  } catch (err) {
+    console.error('Error in /admin/user/:id:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update a specific user by ID
+router.put('/user/:id', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  const { name, gender, mobile, email, pin, dob, address, isVerified, isActivated, isBlackListed, isDead, locality, userRank, isAdmin, isVendor, isCourier, isSU } = req.body;
+  try {
+    const conn = await db.getConnection();
+    
+    // Check if user exists
+    const [existing] = await conn.query('SELECT UserId FROM User WHERE UserId = ?', [req.params.id]);
+    if (!existing || existing.length === 0) {
+      conn.release();
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update user
+    await conn.query(
+      `UPDATE User SET User = ?, Gender = ?, UserMobile = ?, UserEmail = ?, PIN = ?, DoB = ?, Address = ?, IsVerified = ?, IsActivated = ?, IsBlackListed = ?, IsDead = ?, Locality = ?, UserRank = ?, IsAdmin = ?, IsVendor = ?, IsCourier = ?, IsSU = ? WHERE UserId = ?`,
+      [name, gender, mobile, email, pin, dob, address, isVerified, isActivated, isBlackListed, isDead, locality, userRank, isAdmin || 'N', isVendor || 'N', isCourier || 'N', isSU || 'N', req.params.id]
+    );
+    
+    conn.release();
+    res.json({ message: 'User updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Create a new user (admin, vendor, courier)
 router.post('/user', authMiddleware, adminOnlyMiddleware, async (req, res) => {
-  const { name, gender, mobile, email, pin, dob, address, password, role, isVerified = 'N', isActivated = 'N' } = req.body;
+  const { name, gender, mobile, email, pin, dob, address, password, role, isVerified = 'N', isActivated = 'N', locality = 0, userRank = 0 } = req.body;
   if (!name || !gender || !mobile || !email || !pin || !dob || !address || !password || !role) return res.status(400).json({ error: 'Missing fields' });
   if (!['admin', 'vendor', 'courier'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
   try {
@@ -44,8 +107,8 @@ router.post('/user', authMiddleware, adminOnlyMiddleware, async (req, res) => {
     // Insert all required fields, provide defaults for others
     await conn.query(
       `INSERT INTO User (User, Gender, UserMobile, UserEmail, PIN, DoB, Passwd, Address, IsAdmin, IsVendor, IsCourier, IsSU, Locality, UserRank, IsVerified, IsActivated, IsBlackListed, IsDead, RecordCreationLogin, LastUpdationLogin)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 0, 0, ?, ?, 'N', 'N', ?, ?)`,
-      [name, gender, mobile, email, pin, dob, hashed, address, isAdmin, isVendor, isCourier, isVerified, isActivated, email.substring(0, 10), email.substring(0, 10)]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?, ?, 'N', 'N', ?, ?)`
+      [name, gender, mobile, email, pin, dob, hashed, address, isAdmin, isVendor, isCourier, locality, userRank, isVerified, isActivated, email.substring(0, 10), email.substring(0, 10)]
     );
     conn.release();
     res.json({ message: 'User created' });
@@ -54,13 +117,78 @@ router.post('/user', authMiddleware, adminOnlyMiddleware, async (req, res) => {
   }
 });
 
-// View all customers
+// View all customers with pagination
 router.get('/customers', authMiddleware, adminOnlyMiddleware, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
     const conn = await db.getConnection();
-    const [customers] = await conn.query('SELECT * FROM Customer');
+    const [countResult] = await conn.query('SELECT COUNT(*) as count FROM Customer');
+    const total = countResult.count || 0;
+    const customers = await conn.query(
+      'SELECT CustomerId, Customer, CustomerEmail, CustomerMobile, Gender, DoB, Address, CustomerPIN, CustomerRank, Locality, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted FROM Customer LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+    console.log('Fetched customers:', customers);
     conn.release();
-    res.json({ customers });
+    // Use JSON.stringify with a replacer to convert all BigInts to numbers
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ customers, total, page, limit }, (key, value) =>
+      typeof value === 'bigint' ? Number(value) : value
+    ));
+  } catch (err) {
+    console.error('Error in /admin/customers:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get a specific customer by ID
+router.get('/customer/:id', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  const customerId = req.params.id;
+  try {
+    const conn = await db.getConnection();
+    const [customer] = await conn.query(
+      'SELECT CustomerId, Customer, CustomerEmail, CustomerMobile, Gender, CustomerPIN, Locality, DoB, CustomerRank, Passwd, Address, IsVerified, VerificationTimeStamp, IsActivated, ActivationTimeStamp, IsBlackListed, BlackListTimeStamp, IsDead, DeadTimeStamp, IsDeleted, RecordCreationTimeStamp, RecordCreationLogin, LastUpdationTimeStamp, LastUpdationLogin FROM Customer WHERE CustomerId = ?',
+      [customerId]
+    );
+    console.log('Fetching customer with ID:', customerId, 'Result:', customer);
+    conn.release();
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    // Use JSON.stringify with a replacer to convert all BigInts to numbers
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(customer, (key, value) =>
+      typeof value === 'bigint' ? Number(value) : value
+    ));
+  } catch (err) {
+    console.error('Error in /admin/customer/:id:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update a specific customer by ID
+router.put('/customer/:id', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  const { name, gender, mobile, email, pin, dob, address, isVerified, isActivated, isBlackListed, isDead, isDeleted, locality } = req.body;
+  try {
+    const conn = await db.getConnection();
+    
+    // Check if customer exists
+    const [existing] = await conn.query('SELECT CustomerId FROM Customer WHERE CustomerId = ?', [req.params.id]);
+    if (!existing || existing.length === 0) {
+      conn.release();
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    // Update customer
+    await conn.query(
+      `UPDATE Customer SET Customer = ?, Gender = ?, CustomerMobile = ?, CustomerEmail = ?, CustomerPIN = ?, DoB = ?, Address = ?, IsVerified = ?, IsActivated = ?, IsBlackListed = ?, IsDead = ?, IsDeleted = ?, Locality = ? WHERE CustomerId = ?`,
+      [name, gender, mobile, email, pin, dob, address, isVerified, isActivated, isBlackListed, isDead, isDeleted, locality, req.params.id]
+    );
+    
+    conn.release();
+    res.json({ message: 'Customer updated successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

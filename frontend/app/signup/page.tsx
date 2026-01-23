@@ -253,9 +253,10 @@ export default function SignUpPage() {
                     id="locality"
                     value={formData.locality}
                     onChange={(e) => handleInputChange("locality", parseInt(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
+                    className="w-full border rounded-md px-3 py-2 text-gray-900 bg-white"
+                    disabled={localities.length === 0}
                   >
-                    <option value="0">Select Locality</option>
+                    <option value="0">{localities.length === 0 ? 'Loading...' : 'Select Locality'}</option>
                     {localities.map(locality => (
                       <option key={locality.id} value={locality.id}>
                         {locality.name}

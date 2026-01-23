@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
+interface Locality {
+  id: number;
+  name: string;
+}
+
 interface User {
   UserId: number;
   User: string;
@@ -27,9 +32,10 @@ interface User {
 
 export default function CreateUserPage() {
   const [createData, setCreateData] = useState({
-    name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin",
+    name: "", gender: "", mobile: "", email: "", pin: "", locality: 0, dob: "", rank: 0, address: "", password: "", role: "admin",
     isVerified: "Y", isActivated: "Y"
   });
+  const [localities, setLocalities] = useState<Locality[]>([]);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
   const router = useRouter();
@@ -50,6 +56,22 @@ export default function CreateUserPage() {
     return validToken.token;
   };
 
+  const fetchLocalities = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:4000/api/localities");
+      if (response.ok) {
+        const data = await response.json();
+        setLocalities(Array.isArray(data.localities) ? data.localities : []);
+      }
+    } catch (err) {
+      console.error("Error fetching localities:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLocalities();
+  }, [fetchLocalities]);
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
@@ -67,13 +89,15 @@ export default function CreateUserPage() {
         body: JSON.stringify({
           ...createData,
           isVerified: createData.isVerified,
-          isActivated: createData.isActivated
+          isActivated: createData.isActivated,
+          Locality: createData.locality,
+          UserRank: createData.rank
         }),
       });
       const data = await response.json();
       if (response.ok) {
         setCreateSuccess("User created successfully!");
-        setCreateData({ name: "", gender: "", mobile: "", email: "", pin: "", dob: "", address: "", password: "", role: "admin", isVerified: "Y", isActivated: "Y" });
+        setCreateData({ name: "", gender: "", mobile: "", email: "", pin: "", locality: 0, dob: "", rank: 0, address: "", password: "", role: "admin", isVerified: "Y", isActivated: "Y" });
       } else {
         setCreateError(data.error || "Failed to create user");
       }
@@ -180,6 +204,30 @@ export default function CreateUserPage() {
                       onChange={(e) => setCreateData({ ...createData, dob: e.target.value })}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Locality</label>
+                    <select
+                      value={createData.locality}
+                      onChange={(e) => setCreateData({ ...createData, locality: parseInt(e.target.value) || 0 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                    >
+                      <option value="0" className="text-gray-700 bg-white">Select Locality</option>
+                      {localities.map(locality => (
+                        <option key={locality.id} value={locality.id} className="text-gray-900 bg-white">
+                          {locality.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Rank</label>
+                    <input
+                      type="number"
+                      value={createData.rank}
+                      onChange={(e) => setCreateData({ ...createData, rank: parseInt(e.target.value) || 0 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div className="md:col-span-2">

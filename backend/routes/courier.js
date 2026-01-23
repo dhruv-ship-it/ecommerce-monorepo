@@ -48,6 +48,8 @@ router.get('/order/:id', authMiddleware, courierOnlyMiddleware, async (req, res)
       'c.Customer as CustomerName, ' +
       'c.CustomerEmail, ' +
       'c.CustomerMobile, ' +
+      'c.Address as CustomerAddress, ' +
+      'c.Locality, ' +
       'pur.TotalAmount, ' +
       'v.User as VendorName, ' +
       'v.UserMobile as VendorMobile, ' +
@@ -79,13 +81,24 @@ router.get('/order/:id', authMiddleware, courierOnlyMiddleware, async (req, res)
     if (!orderArray || orderArray.length === 0) {
       // Check archived orders if not found in active table
       const archivedOrderResult = await conn.query(
-        'SELECT vpc_arch.*, ' +
+        'SELECT vpc_arch.PurchaseId as PuchaseId, ' +
+        'vpc_arch.Vendor, vpc_arch.Product as ProductId, vpc_arch.Customer as CustomerId, ' +
+        'vpc_arch.Courier, vpc_arch.TrackingNo, ' +
+        'vpc_arch.IsReady_for_Pickup_by_Courier, vpc_arch.Ready_for_Pickup_by_CourierTimeStamp, ' +
+        'vpc_arch.IsPicked_by_Courier, vpc_arch.Picked_by_CourierTimeStamp, ' +
+        'vpc_arch.IsDispatched, vpc_arch.DispatchedTimeStamp, ' +
+        'vpc_arch.IsOut_for_Delivery, vpc_arch.Out_for_DeliveryTimeStamp, ' +
+        'vpc_arch.IsDelivered, vpc_arch.DeliveryTimeStamp, ' +
+        'vpc_arch.IsReturned, vpc_arch.ReturnTimeStamp, ' +
+        'vpc_arch.MRP_SS, vpc_arch.Discount_SS, vpc_arch.GST_SS, vpc_arch.PurchaseQty, ' +
         'vpc_arch.OrderCreationTimeStamp as OrderDate, ' +
         'p.Product, ' +
         'p.MRP as ProductPrice, ' +
         'c.Customer as CustomerName, ' +
         'c.CustomerEmail, ' +
         'c.CustomerMobile, ' +
+        'c.Address as CustomerAddress, ' +
+        'c.Locality, ' +
         'pur_arch.TotalAmount, ' +
         'v.User as VendorName, ' +
         'v.UserMobile as VendorMobile, ' +
@@ -589,6 +602,99 @@ router.post('/order/:id/tracking', authMiddleware, courierOnlyMiddleware, async 
     res.status(500).json({ error: 'Server error' });
   } finally {
     if (conn) conn.release();
+  }
+});
+
+// Get customer address hierarchy
+router.get('/customer/address-hierarchy/:localityId', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  try {
+    const { localityId } = req.params;
+    
+    // Handle case where localityId is 0 or invalid
+    if (!localityId || localityId === '0' || isNaN(localityId)) {
+      return res.json({
+        locality: "",
+        district: "",
+        state: "",
+        country: "",
+        continent: ""
+      });
+    }
+    
+    const conn = await db.getConnection();
+    
+    // Get locality info
+    const [localityRow] = await conn.query('SELECT Locality, District FROM locality WHERE LocalityId = ? AND IsDeleted != "Y"', [localityId]);
+    
+    // If locality doesn't exist, return empty hierarchy
+    if (!localityRow) {
+      conn.release();
+      return res.json({
+        locality: "",
+        district: "",
+        state: "",
+        country: "",
+        continent: ""
+      });
+    }
+    
+    const locality = localityRow.Locality || "";
+    const districtId = localityRow.District;
+    
+    // Get district info
+    let district = "";
+    let stateId = 0;
+    if (districtId && districtId !== 0 && !isNaN(districtId)) {
+      const [districtRow] = await conn.query('SELECT District, State FROM district WHERE DistrictId = ? AND IsDeleted != "Y"', [districtId]);
+      if (districtRow && districtRow.District) {
+        district = districtRow.District || "";
+        stateId = districtRow.State;
+      }
+    }
+    
+    // Get state info
+    let state = "";
+    let countryId = 0;
+    if (stateId && stateId !== 0 && !isNaN(stateId)) {
+      const [stateRow] = await conn.query('SELECT State, Country FROM state WHERE StateId = ? AND IsDeleted != "Y"', [stateId]);
+      if (stateRow && stateRow.State) {
+        state = stateRow.State || "";
+        countryId = stateRow.Country;
+      }
+    }
+    
+    // Get country info
+    let country = "";
+    let continentId = 0;
+    if (countryId && countryId !== 0 && !isNaN(countryId)) {
+      const [countryRow] = await conn.query('SELECT Country, Continent FROM country WHERE CountryId = ? AND IsDeleted != "Y"', [countryId]);
+      if (countryRow && countryRow.Country) {
+        country = countryRow.Country || "";
+        continentId = countryRow.Continent;
+      }
+    }
+    
+    // Get continent info
+    let continent = "";
+    if (continentId && continentId !== 0 && !isNaN(continentId)) {
+      const [continentRow] = await conn.query('SELECT Continent FROM continent WHERE ContinentId = ? AND IsDeleted != "Y"', [continentId]);
+      if (continentRow && continentRow.Continent) {
+        continent = continentRow.Continent || "";
+      }
+    }
+    
+    conn.release();
+    
+    res.json({
+      locality,
+      district,
+      state,
+      country,
+      continent
+    });
+  } catch (err) {
+    console.error('Courier address hierarchy error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

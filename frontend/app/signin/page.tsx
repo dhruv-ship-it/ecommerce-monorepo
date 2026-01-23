@@ -48,6 +48,13 @@ export default function SignInPage() {
         setError(json.error || 'Invalid email or password');
       } else {
         localStorage.setItem('token', json.token);
+        // Dispatch storage event to notify AuthProvider
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'token',
+          oldValue: null,
+          newValue: json.token,
+          url: window.location.href
+        }));
         // Redirect to home page
         router.push("/");
       }

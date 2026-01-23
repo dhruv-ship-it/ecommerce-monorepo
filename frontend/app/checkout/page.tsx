@@ -35,23 +35,21 @@ interface CartItem {
 
 export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [shippingAddress, setShippingAddress] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
+  const [customerDetails, setCustomerDetails] = useState({
     address: "",
     locality: "",
     district: "",
     state: "",
     country: "",
-    zipCode: "",
-  })
+    continent: "",
+    hasLocalityId: false  // Track if customer had a locality ID
+  });
+  const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // Fetch cart items on component mount
+  // Fetch cart items separately
   useEffect(() => {
     async function fetchCart() {
       // Validate authentication
@@ -86,12 +84,130 @@ export default function CheckoutPage() {
       } catch (err) {
         console.error("Cart fetch error:", err)
         setError('Failed to fetch cart items')
+      }
+    }
+    
+    fetchCart()
+  }, [])
+
+  // Fetch customer details including address hierarchy
+  useEffect(() => {
+    async function fetchCustomerDetails() {
+      // Validate authentication
+      if (!validateCustomerAuth()) {
+        performCustomerLogout('/auth/signin')
+        return
+      }
+      
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setError('Authentication required')
+        setLoading(false)
+        return
+      }
+      
+      try {
+        // First, get customer information
+        const customerResponse = await fetch(`${API}/api/customer/info`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        if (customerResponse.ok) {
+          const customerData = await customerResponse.json()
+          console.log("Customer data received:", customerData);
+          
+          // Get the customer's address and locality ID
+          const customerAddress = customerData.customer?.Address || ""
+          const customerLocalityId = customerData.customer?.Locality || 0
+          
+          console.log("Customer address:", customerAddress);
+          console.log("Customer locality ID:", customerLocalityId);
+          
+            if (customerLocalityId && customerLocalityId !== 0) {
+          try {
+            console.log("Fetching address hierarchy for locality ID:", customerLocalityId);
+            // Note: This endpoint requires authorization since it's under /api/customer
+            const token = localStorage.getItem('token');
+            const hierarchyResponse = await fetch(`${API}/api/customer/address-hierarchy/${customerLocalityId}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            })
+                      
+            console.log("Hierarchy API response status:", hierarchyResponse.status);
+                      
+            if (hierarchyResponse.ok) {
+              const hierarchyData = await hierarchyResponse.json()
+              console.log("Hierarchy data received:", hierarchyData);
+                        
+              setCustomerDetails({
+                address: customerAddress,
+                locality: hierarchyData.locality || "",
+                district: hierarchyData.district || "",
+                state: hierarchyData.state || "",
+                country: hierarchyData.country || "",
+                continent: hierarchyData.continent || "",
+                hasLocalityId: true  // Mark that we had a locality ID
+              })
+            } else {
+              // Handle API errors gracefully
+              console.warn("Failed to fetch address hierarchy, using basic address only")
+              console.warn("Response status:", hierarchyResponse.status);
+              const errorText = await hierarchyResponse.text();
+              console.warn("Error response:", errorText);
+                        
+              setCustomerDetails({
+                address: customerAddress,
+                locality: "",
+                district: "",
+                state: "",
+                country: "",
+                continent: "",
+                hasLocalityId: true  // Mark that we had a locality ID
+              })
+            }
+          } catch (hierarchyError) {
+            console.error("Address hierarchy fetch error:", hierarchyError)
+            // Fallback to just the address
+            setCustomerDetails({
+              address: customerAddress,
+              locality: "",
+              district: "",
+              state: "",
+              country: "",
+              continent: "",
+              hasLocalityId: true  // Mark that we had a locality ID
+            })
+          }
+        } else {
+            // If no locality ID, just set the address
+            setCustomerDetails({
+              address: customerAddress,
+              locality: "",
+              district: "",
+              state: "",
+              country: "",
+              continent: "",
+              hasLocalityId: false  // Mark that we did not have a locality ID
+            })
+          }
+        } else if (customerResponse.status === 401) {
+          performCustomerLogout('/auth/signin')
+        } else {
+          const errorData = await customerResponse.json()
+          setError(errorData.error || 'Failed to fetch customer details')
+        }
+      } catch (err) {
+        console.error("Customer details fetch error:", err)
+        setError('Failed to fetch customer details')
       } finally {
         setLoading(false)
       }
     }
     
-    fetchCart()
+    fetchCustomerDetails()
   }, [])
 
   const subtotal = cartItems.reduce((sum, item) => {
@@ -99,7 +215,7 @@ export default function CheckoutPage() {
     return sum + (price * item.Quantity);
   }, 0);
   
-  const shipping = 0; // Simple free shipping, no extra delivery charges
+  const shipping: number = 0; // Simple free shipping, no extra delivery charges
   const tax = cartItems.reduce((sum, item) => {
     const gst = parseFloat(item.GST_SS) || 0;
     return sum + (gst * item.Quantity);
@@ -114,10 +230,7 @@ export default function CheckoutPage() {
   const total = subtotal + tax - discount + shipping;
 
   const handleInputChange = (field: string, value: string) => {
-    setShippingAddress((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
+    // No-op since we're not using the form inputs anymore
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -191,7 +304,7 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Checkout Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Shipping Address */}
+            {/* Shipping Address Display */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -199,78 +312,24 @@ export default function CheckoutPage() {
                   Shipping Address
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="fullName">Full Name *</Label>
-                    <Input
-                      id="fullName"
-                      value={shippingAddress.fullName}
-                      onChange={(e) => handleInputChange("fullName", e.target.value)}
-                      required
-                    />
+              <CardContent>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Your order will be delivered to your registered address:</p>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="font-medium">{customerDetails.address || "Address not provided"}</p>
+                    {customerDetails.locality && <p>{customerDetails.locality}</p>}
+                    {customerDetails.district && <p>{customerDetails.district}</p>}
+                    {customerDetails.state && <p>{customerDetails.state}</p>}
+                    {customerDetails.country && <p>{customerDetails.country}</p>}
+                    {customerDetails.continent && <p>{customerDetails.continent}</p>}
+                    
+                    {/* Show message when locality information is missing */}
+                    {customerDetails.hasLocalityId && !customerDetails.locality && (
+                      <p className="text-sm text-yellow-600 mt-2">
+                        ⚠️ Your locality information is missing. Please contact support to update your address details.
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={shippingAddress.email}
-                      onChange={(e) => handleInputChange("email", e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="phone">Phone Number *</Label>
-                  <Input
-                    id="phone"
-                    value={shippingAddress.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="address">Street Address *</Label>
-                  <Textarea
-                    id="address"
-                    value={shippingAddress.address}
-                    onChange={(e) => handleInputChange("address", e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="locality">Locality/Area *</Label>
-                    <Input
-                      id="locality"
-                      value={shippingAddress.locality}
-                      onChange={(e) => handleInputChange("locality", e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="district">District *</Label>
-                    <Input
-                      id="district"
-                      value={shippingAddress.district}
-                      onChange={(e) => handleInputChange("district", e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="zipCode">ZIP/Postal Code *</Label>
-                  <Input
-                    id="zipCode"
-                    value={shippingAddress.zipCode}
-                    onChange={(e) => handleInputChange("zipCode", e.target.value)}
-                    required
-                  />
                 </div>
               </CardContent>
             </Card>

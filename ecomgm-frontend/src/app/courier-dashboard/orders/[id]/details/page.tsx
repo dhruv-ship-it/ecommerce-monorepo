@@ -22,6 +22,8 @@ interface OrderDetails {
   Customer: string;
   CustomerMobile: string;
   CustomerEmail: string;
+  CustomerAddress?: string;
+  Locality?: number;
   VendorName: string;
   VendorMobile: string;
   VendorEmail: string;
@@ -44,6 +46,13 @@ export default function CourierOrderDetails({ params }: { params: { id: string }
   const { id } = params;
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [addressHierarchy, setAddressHierarchy] = useState({
+    locality: '',
+    district: '',
+    state: '',
+    country: '',
+    continent: ''
+  });
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +85,24 @@ export default function CourierOrderDetails({ params }: { params: { id: string }
       if (response.ok) {
         const data = await response.json();
         setOrder(data.order);
+        
+        // Fetch address hierarchy if customer has a locality
+        if (data.order.Locality && data.order.Locality !== 0) {
+          try {
+            const hierarchyResponse = await fetch(`http://localhost:4000/courier/customer/address-hierarchy/${data.order.Locality}`, {
+              headers: {
+                Authorization: `Bearer ${validToken.token}`,
+              },
+            });
+            
+            if (hierarchyResponse.ok) {
+              const hierarchyData = await hierarchyResponse.json();
+              setAddressHierarchy(hierarchyData);
+            }
+          } catch (hierarchyError) {
+            console.error('Error fetching address hierarchy:', hierarchyError);
+          }
+        }
       } else if (response.status === 401) {
         performAutoLogout("/");
       } else if (response.status === 404) {
@@ -201,12 +228,6 @@ export default function CourierOrderDetails({ params }: { params: { id: string }
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => router.push(`/courier-dashboard/orders/${id}/update`)}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-              >
-                Update Status
-              </button>
-              <button
                 onClick={() => router.push("/courier-dashboard/orders")}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
@@ -304,6 +325,22 @@ export default function CourierOrderDetails({ params }: { params: { id: string }
                       <p className="text-sm text-gray-500">Customer Email</p>
                       <p className="text-sm font-medium">{order.CustomerEmail}</p>
                     </div>
+                    {(order.CustomerAddress || addressHierarchy.locality) && (
+                      <div className="pt-2 border-t border-gray-200 mt-2">
+                        <p className="text-sm text-gray-500">
+                          <span className="font-medium">Address:</span>
+                        </p>
+                        <div className="text-sm text-gray-900 mt-1 ml-4 space-y-1">
+                          {order.CustomerAddress && <p>{order.CustomerAddress}</p>}
+                          {addressHierarchy.locality && <p>{addressHierarchy.locality}</p>}
+                          {addressHierarchy.district && <p>{addressHierarchy.district}</p>}
+                          {addressHierarchy.state && <p>{addressHierarchy.state}</p>}
+                          {addressHierarchy.country && <p>{addressHierarchy.country}</p>}
+                          {addressHierarchy.continent && <p>{addressHierarchy.continent}</p>}
+                          {!order.CustomerAddress && !addressHierarchy.locality && <p className="text-gray-500">Address not available</p>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

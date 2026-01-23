@@ -139,13 +139,27 @@ export default function AdminDashboard() {
               
               <div className="mt-8">
                 <h4 className="text-md font-medium text-gray-900 mb-4 text-blue-600">Admin Management and Actions</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <button 
                     onClick={() => router.push('/admin-dashboard/users')}
                     className="p-4 border border-blue-300 rounded-lg hover:bg-blue-50 text-left cursor-pointer bg-blue-50"
                   >
                     <h5 className="font-medium text-blue-900">Manage Users</h5>
                     <p className="text-sm text-blue-700">Create and manage admin, vendor, courier accounts</p>
+                  </button>
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/view-users')}
+                    className="p-4 border border-blue-300 rounded-lg hover:bg-blue-50 text-left cursor-pointer bg-blue-50"
+                  >
+                    <h5 className="font-medium text-blue-900">View Users</h5>
+                    <p className="text-sm text-blue-700">View and manage existing user accounts</p>
+                  </button>
+                  <button 
+                    onClick={() => router.push('/admin-dashboard/view-customers')}
+                    className="p-4 border border-blue-300 rounded-lg hover:bg-blue-50 text-left cursor-pointer bg-blue-50"
+                  >
+                    <h5 className="font-medium text-blue-900">View Customers</h5>
+                    <p className="text-sm text-blue-700">View and manage customer accounts</p>
                   </button>
                   <button 
                     onClick={() => router.push('/admin-dashboard/orders')}

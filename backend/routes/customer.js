@@ -36,6 +36,113 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
+// Get customer info for checkout
+router.get('/info', authMiddleware, async (req, res) => {
+  if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const conn = await db.getConnection();
+    const [customer] = await conn.query('SELECT CustomerId, Customer, CustomerEmail, CustomerMobile, Address, Locality FROM customer WHERE CustomerId = ?', [req.user.id]);
+    conn.release();
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ customer });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get address hierarchy by locality ID
+router.get('/address-hierarchy/:localityId', async (req, res) => {
+  try {
+    const { localityId } = req.params;
+    
+    // Handle case where localityId is 0 or invalid
+    if (!localityId || localityId === '0' || isNaN(localityId)) {
+      return res.json({
+        locality: "",
+        district: "",
+        state: "",
+        country: "",
+        continent: ""
+      });
+    }
+    
+    const conn = await db.getConnection();
+    
+    // Get locality info
+    const [localityRow] = await conn.query('SELECT Locality, District FROM locality WHERE LocalityId = ? AND IsDeleted != "Y"', [localityId]);
+    
+    // If locality doesn't exist, return empty hierarchy
+    if (!localityRow) {
+      conn.release();
+      return res.json({
+        locality: "",
+        district: "",
+        state: "",
+        country: "",
+        continent: ""
+      });
+    }
+    
+    const locality = localityRow.Locality || "";
+    const districtId = localityRow.District;
+    
+    // Get district info
+    let district = "";
+    let stateId = 0;
+    if (districtId && districtId !== 0 && !isNaN(districtId)) {
+      const [districtRow] = await conn.query('SELECT District, State FROM district WHERE DistrictId = ? AND IsDeleted != "Y"', [districtId]);
+      if (districtRow && districtRow.District) {
+        district = districtRow.District || "";
+        stateId = districtRow.State;
+      }
+    }
+    
+    // Get state info
+    let state = "";
+    let countryId = 0;
+    if (stateId && stateId !== 0 && !isNaN(stateId)) {
+      const [stateRow] = await conn.query('SELECT State, Country FROM state WHERE StateId = ? AND IsDeleted != "Y"', [stateId]);
+      if (stateRow && stateRow.State) {
+        state = stateRow.State || "";
+        countryId = stateRow.Country;
+      }
+    }
+    
+    // Get country info
+    let country = "";
+    let continentId = 0;
+    if (countryId && countryId !== 0 && !isNaN(countryId)) {
+      const [countryRow] = await conn.query('SELECT Country, Continent FROM country WHERE CountryId = ? AND IsDeleted != "Y"', [countryId]);
+      if (countryRow && countryRow.Country) {
+        country = countryRow.Country || "";
+        continentId = countryRow.Continent;
+      }
+    }
+    
+    // Get continent info
+    let continent = "";
+    if (continentId && continentId !== 0 && !isNaN(continentId)) {
+      const [continentRow] = await conn.query('SELECT Continent FROM continent WHERE ContinentId = ? AND IsDeleted != "Y"', [continentId]);
+      if (continentRow && continentRow.Continent) {
+        continent = continentRow.Continent || "";
+      }
+    }
+    
+    conn.release();
+    
+    res.json({
+      locality,
+      district,
+      state,
+      country,
+      continent
+    });
+  } catch (err) {
+    console.error('Address hierarchy error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Update customer profile
 router.put('/profile', authMiddleware, async (req, res) => {
   if (req.user.userType !== 'customer') return res.status(403).json({ error: 'Forbidden' });

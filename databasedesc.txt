@@ -883,4 +883,118 @@ MariaDB [ecomv1]> desc user;
 +-------------------------+-----------------+------+-----+---------------------+-------------------------------+
 28 rows in set (0.019 sec)
 
+MariaDB [ecomv1]> 
+MariaDB [ecomv1]> show tables;
++-----------------------------------+
+| Tables_in_ecomv1                  |
++-----------------------------------+
+| brand                             |
+| color                             |
+| company                           |
+| continent                         |
+| country                           |
+| currency                          |
+| customer                          |
+| district                          |
+| feedback                          |
+| locality                          |
+| material                          |
+| model                             |
+| product                           |
+| product_images                    |
+| productcategory                   |
+| productsubcategory                |
+| purchase                          |
+| purchase_arch                     |
+| shape                             |
+| shoppingcart                      |
+| size                              |
+| state                             |
+| su                                |
+| unit                              |
+| user                              |
+| vendorproduct                     |
+| vendorproductcustomercourier      |
+| vendorproductcustomercourier_arch |
++-----------------------------------+
+28 rows in set (0.002 sec)
+
+MariaDB [ecomv1]> desc locality;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| LocalityId              | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Locality                | varchar(255) | NO   | UNI | NULL                |                               |
+| PIN                     | varchar(10)  | NO   |     | NULL                |                               |
+| IsCity                  | char(1)      | NO   |     |                     |                               |
+| IsTown                  | char(1)      | NO   |     |                     |                               |
+| IsVillage               | char(1)      | NO   |     |                     |                               |
+| District                | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+12 rows in set (0.021 sec)
+
+MariaDB [ecomv1]> desc district;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| DistrictId              | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| District                | varchar(255) | NO   | UNI | NULL                |                               |
+| State                   | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.034 sec)
+
+MariaDB [ecomv1]> desc state;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| StateId                 | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| State                   | varchar(255) | NO   | UNI | NULL                |                               |
+| Country                 | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.032 sec)
+
+MariaDB [ecomv1]> desc country;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| CountryId               | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Country                 | varchar(255) | NO   | UNI | NULL                |                               |
+| Continent               | int(8)       | NO   |     | 0                   |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+8 rows in set (0.022 sec)
+
+MariaDB [ecomv1]> desc continent;
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type         | Null | Key | Default             | Extra                         |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+| ContinentId             | int(8)       | NO   | PRI | NULL                | auto_increment                |
+| Continent               | varchar(255) | NO   | UNI | NULL                |                               |
+| IsDeleted               | char(1)      | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime     | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)  | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime     | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)  | NO   |     |                     |                               |
++-------------------------+--------------+------+-----+---------------------+-------------------------------+
+7 rows in set (0.036 sec)
+
 MariaDB [ecomv1]>

@@ -10,20 +10,43 @@ router.get('/localities', async (req, res) => {
     const conn = await db.getConnection();
     console.log('Connection acquired');
     
-    const [localities] = await conn.query(
+    const result = await conn.query(
       'SELECT LocalityId as id, Locality as name FROM Locality WHERE IsDeleted != ? ORDER BY Locality', ['Y']
     );
     
-    console.log('Query executed, results:', localities);
-    conn.release();
+    // Handle the MariaDB result - it might return the actual rows in different positions
+    let localities;
+    if (Array.isArray(result) && result.length > 0) {
+      // Standard array result
+      localities = result;
+    } else if (Array.isArray(result[0])) {
+      // MariaDB might return [rows, metadata] - take the first element
+      localities = result[0];
+    } else if (result && typeof result === 'object' && !Array.isArray(result)) {
+      // If it's an object that's not an array, it might be a single record
+      // But first check if this might be the array-of-arrays issue
+      const keys = Object.keys(result);
+      if (keys.length > 0 && !isNaN(keys[0])) {
+        // Numeric keys suggest it's an array masquerading as an object
+        localities = Object.values(result);
+      } else {
+        // Single record object
+        localities = [result];
+      }
+    } else {
+      localities = [];
+    }
     
     // Convert BigInt values to numbers if needed
-    const processedLocalities = localities && Array.isArray(localities) ? localities.map(loc => ({
-      ...loc,
-      id: typeof loc.id === 'bigint' ? Number(loc.id) : loc.id
-    })) : [];
+    let processedLocalities = localities.map(loc => {
+      return {
+        ...loc,
+        id: typeof loc.id === 'bigint' ? Number(loc.id) : loc.id
+      };
+    });
     
-    console.log('Sending response with', processedLocalities.length, 'localities');
+    conn.release();
+    
     res.json({ localities: processedLocalities });
   } catch (err) {
     console.error('Error fetching localities:', err);

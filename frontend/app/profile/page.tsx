@@ -303,10 +303,10 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Locality</FormLabel>
                       <FormControl>
-                        <select {...field} value={field.value} onChange={field.onChange} className="w-full border rounded p-2">
-                          <option value="0">Select Locality</option>
+                        <select {...field} value={field.value} onChange={field.onChange} className="w-full border rounded p-2" disabled={localities.length === 0}>
+                          <option value="0" className="text-gray-700 bg-white">{localities.length === 0 ? 'Loading...' : 'Select Locality'}</option>
                           {localities.map(locality => (
-                            <option key={locality.LocalityId} value={locality.LocalityId}>
+                            <option key={locality.LocalityId} value={locality.LocalityId} className="text-gray-900 bg-white">
                               {locality.Locality}
                             </option>
                           ))}

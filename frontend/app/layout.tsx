@@ -4,7 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { Toaster } from "@/components/ui/toaster"
-import ClientSessionProvider from '@/components/ClientSessionProvider';
+import { AuthProvider } from "@/components/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -28,11 +28,11 @@ export default function RootLayout({
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
       </head>
       <body className={inter.className}>
-        <ClientSessionProvider>
+        <AuthProvider>
           <Navbar />
           <main className="min-h-screen">{children}</main>
           <Toaster />
-        </ClientSessionProvider>
+        </AuthProvider>
       </body>
     </html>
   )

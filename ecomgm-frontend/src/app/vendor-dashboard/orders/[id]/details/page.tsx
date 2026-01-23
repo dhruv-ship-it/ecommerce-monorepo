@@ -23,6 +23,8 @@ interface Order {
   CustomerName: string;
   CustomerEmail: string;
   CustomerMobile: string;
+  CustomerAddress?: string;
+  Locality?: number;
   CourierName: string;
   CourierMobile: string;
   // Tracking fields from VendorProductCustomerCourier
@@ -77,6 +79,13 @@ export default function OrderDetails({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
+  const [addressHierarchy, setAddressHierarchy] = useState({
+    locality: '',
+    district: '',
+    state: '',
+    country: '',
+    continent: ''
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -109,6 +118,24 @@ export default function OrderDetails({ params }: { params: Promise<{ id: string 
       if (orderResponse.ok) {
         const orderData = await orderResponse.json();
         setOrder(orderData.order);
+        
+        // Fetch address hierarchy if customer has a locality
+        if (orderData.order.Locality && orderData.order.Locality !== 0) {
+          try {
+            const hierarchyResponse = await fetch(`http://localhost:4000/vendor/customer/address-hierarchy/${orderData.order.Locality}`, {
+              headers: {
+                Authorization: `Bearer ${validToken.token}`,
+              },
+            });
+            
+            if (hierarchyResponse.ok) {
+              const hierarchyData = await hierarchyResponse.json();
+              setAddressHierarchy(hierarchyData);
+            }
+          } catch (hierarchyError) {
+            console.error('Error fetching address hierarchy:', hierarchyError);
+          }
+        }
       } else if (orderResponse.status === 401) {
         performAutoLogout("/");
         return;
@@ -378,6 +405,22 @@ export default function OrderDetails({ params }: { params: Promise<{ id: string 
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Phone:</span> {order.CustomerMobile}
                     </p>
+                    {(order.CustomerAddress || addressHierarchy.locality) && (
+                      <div className="pt-2 border-t border-gray-200 mt-2">
+                        <p className="text-sm text-gray-600">
+                          <span className="font-medium">Address:</span>
+                        </p>
+                        <div className="text-sm text-gray-900 mt-1 ml-4 space-y-1">
+                          {order.CustomerAddress && <p>{order.CustomerAddress}</p>}
+                          {addressHierarchy.locality && <p>{addressHierarchy.locality}</p>}
+                          {addressHierarchy.district && <p>{addressHierarchy.district}</p>}
+                          {addressHierarchy.state && <p>{addressHierarchy.state}</p>}
+                          {addressHierarchy.country && <p>{addressHierarchy.country}</p>}
+                          {addressHierarchy.continent && <p>{addressHierarchy.continent}</p>}
+                          {!order.CustomerAddress && !addressHierarchy.locality && <p className="text-gray-500">Address not available</p>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

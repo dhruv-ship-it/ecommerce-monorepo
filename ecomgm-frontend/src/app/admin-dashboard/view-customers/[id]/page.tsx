@@ -4,22 +4,18 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
-interface User {
-  UserId: number;
-  User: string;
+interface Customer {
+  CustomerId: number;
+  Customer: string;
   Gender: string;
-  UserMobile: string;
-  UserEmail: string;
-  PIN: string;
+  CustomerMobile: string;
+  CustomerEmail: string;
+  CustomerPIN: string;
   Locality: number;
   DoB: string;
-  UserRank: number;
+  CustomerRank: number;
   Passwd: string;
   Address: string;
-  IsSU: string;
-  IsAdmin: string;
-  IsVendor: string;
-  IsCourier: string;
   IsVerified: string;
   VerificationTimeStamp: string;
   IsActivated: string;
@@ -40,14 +36,15 @@ interface Locality {
   Locality: string;
 }
 
-export default function EditUserPage() {
-  const [user, setUser] = useState<User | null>(null);
+export default function EditCustomerPage() {
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [localities, setLocalities] = useState<Locality[]>([]);
+  console.log('Component render - localities length:', localities.length, 'localities:', localities);
   const [formData, setFormData] = useState({
     name: '', gender: '', mobile: '', email: '', pin: '', locality: 0, dob: '', rank: 0, address: '',
-    isSU: '', isAdmin: '', isVendor: '', isCourier: '', isVerified: '', isActivated: '', isBlackListed: '', isDead: '',
+    isVerified: '', isActivated: '', isBlackListed: '', isDead: '', isDeleted: '',
     verificationTimeStamp: '', activationTimeStamp: '', blackListTimeStamp: '', deadTimeStamp: '', recordCreationTimeStamp: '',
-    recordCreationLogin: '', lastUpdationTimeStamp: '', lastUpdationLogin: '', isDeleted: ''
+    recordCreationLogin: '', lastUpdationTimeStamp: '', lastUpdationLogin: ''
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,44 +59,40 @@ export default function EditUserPage() {
       return;
     }
     
-    fetchUserData();
+    fetchCustomerData();
     fetchLocalities();
   }, []);
 
   useEffect(() => {
-    if (user) {
+    if (customer) {
       setFormData({
-        name: user.User,
-        gender: user.Gender,
-        mobile: user.UserMobile,
-        email: user.UserEmail,
-        pin: user.PIN,
-        locality: user.Locality || 0,
-        dob: user.DoB,
-        rank: user.UserRank || 0,
-        address: user.Address,
-        isSU: user.IsSU,
-        isAdmin: user.IsAdmin,
-        isVendor: user.IsVendor,
-        isCourier: user.IsCourier,
-        isVerified: user.IsVerified,
-        isActivated: user.IsActivated,
-        isBlackListed: user.IsBlackListed,
-        isDead: user.IsDead,
-        verificationTimeStamp: user.VerificationTimeStamp,
-        activationTimeStamp: user.ActivationTimeStamp,
-        blackListTimeStamp: user.BlackListTimeStamp,
-        deadTimeStamp: user.DeadTimeStamp,
-        recordCreationTimeStamp: user.RecordCreationTimeStamp,
-        recordCreationLogin: user.RecordCreationLogin,
-        lastUpdationTimeStamp: user.LastUpdationTimeStamp,
-        lastUpdationLogin: user.LastUpdationLogin,
-        isDeleted: user.IsDeleted
+        name: customer.Customer,
+        gender: customer.Gender,
+        mobile: customer.CustomerMobile,
+        email: customer.CustomerEmail,
+        pin: customer.CustomerPIN,
+        locality: customer.Locality || 0,
+        dob: customer.DoB,
+        rank: customer.CustomerRank || 0,
+        address: customer.Address,
+        isVerified: customer.IsVerified,
+        isActivated: customer.IsActivated,
+        isBlackListed: customer.IsBlackListed,
+        isDead: customer.IsDead,
+        isDeleted: customer.IsDeleted,
+        verificationTimeStamp: customer.VerificationTimeStamp,
+        activationTimeStamp: customer.ActivationTimeStamp,
+        blackListTimeStamp: customer.BlackListTimeStamp,
+        deadTimeStamp: customer.DeadTimeStamp,
+        recordCreationTimeStamp: customer.RecordCreationTimeStamp,
+        recordCreationLogin: customer.RecordCreationLogin,
+        lastUpdationTimeStamp: customer.LastUpdationTimeStamp,
+        lastUpdationLogin: customer.LastUpdationLogin
       });
     }
-  }, [user]);
+  }, [customer]);
 
-  const fetchUserData = async () => {
+  const fetchCustomerData = async () => {
     try {
       const validToken = getValidToken();
       if (!validToken) {
@@ -107,24 +100,24 @@ export default function EditUserPage() {
         return;
       }
 
-      const userId = params.id;
-      const response = await fetch(`http://localhost:4000/su/user/${userId}`, {
+      const customerId = params.id;
+      const response = await fetch(`http://localhost:4000/admin/customer/${customerId}`, {
         headers: {
           Authorization: `Bearer ${validToken.token}`,
         },
       });
 
       if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
+        const customerData = await response.json();
+        setCustomer(customerData);
       } else if (response.status === 401) {
         performAutoLogout("/");
       } else {
-        setError("Failed to fetch user data");
+        setError("Failed to fetch customer data");
       }
     } catch (err) {
-      console.error("Error fetching user:", err);
-      setError("Error fetching user data");
+      console.error("Error fetching customer:", err);
+      setError("Error fetching customer data");
     } finally {
       setLoading(false);
     }
@@ -132,21 +125,28 @@ export default function EditUserPage() {
 
   const fetchLocalities = async () => {
     try {
+      console.log('Fetching localities...');
       const response = await fetch("http://localhost:4000/api/localities");
+      console.log('Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('Raw API response:', data);
         // Define type for incoming data
         interface ApiLocality {
           id: number;
           name: string;
         }
         const localitiesArray = Array.isArray(data.localities) ? data.localities : [];
+        console.log('Transformed localities array:', localitiesArray);
         // Transform the API response to match the Locality interface
         const transformedLocalities: Locality[] = localitiesArray.map((loc: ApiLocality) => ({
           LocalityId: loc.id,
           Locality: loc.name
         }));
+        console.log('Final transformed localities:', transformedLocalities);
         setLocalities(transformedLocalities);
+      } else {
+        console.error('Failed to fetch localities, status:', response.status);
       }
     } catch (err) {
       console.error("Error fetching localities:", err);
@@ -165,30 +165,27 @@ export default function EditUserPage() {
         return;
       }
 
-      const response = await fetch(`http://localhost:4000/su/user/${user?.UserId}`, {
+      const response = await fetch(`http://localhost:4000/admin/customer/${customer?.CustomerId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${validToken.token}`,
         },
         body: JSON.stringify({
-          User: formData.name,
+          Customer: formData.name,
           Gender: formData.gender,
-          UserMobile: formData.mobile,
-          UserEmail: formData.email,
-          PIN: formData.pin,
+          CustomerMobile: formData.mobile,
+          CustomerEmail: formData.email,
+          CustomerPIN: formData.pin,
           Locality: formData.locality,
           DoB: formData.dob,
-          UserRank: formData.rank,
+          CustomerRank: formData.rank,
           Address: formData.address,
-          IsSU: formData.isSU,
-          IsAdmin: formData.isAdmin,
-          IsVendor: formData.isVendor,
-          IsCourier: formData.isCourier,
           IsVerified: formData.isVerified,
           IsActivated: formData.isActivated,
           IsBlackListed: formData.isBlackListed,
           IsDead: formData.isDead,
+          IsDeleted: formData.isDeleted,
           // Note: Password is not updated through this form
           // Timestamps and login info are automatically managed by the database
         }),
@@ -196,12 +193,12 @@ export default function EditUserPage() {
 
       const data = await response.json();
       if (response.ok) {
-        setSuccess("User updated successfully!");
+        setSuccess("Customer updated successfully!");
       } else {
-        setError(data.error || "Failed to update user");
+        setError(data.error || "Failed to update customer");
       }
     } catch (err) {
-      console.error("Error updating user:", err);
+      console.error("Error updating customer:", err);
       setError("Network error. Please try again.");
     }
   };
@@ -214,7 +211,7 @@ export default function EditUserPage() {
     );
   }
 
-  if (!user) {
+  if (!customer) {
     return (
       <div className="min-h-screen bg-gray-50">
         <nav className="bg-white shadow-sm border-b">
@@ -222,15 +219,15 @@ export default function EditUserPage() {
             <div className="flex justify-between h-16">
               <div className="flex items-center">
                 <h1 className="text-xl font-semibold text-gray-900">
-                  SmartKartMGM - SU Dashboard
+                  SmartKartMGM - Admin Dashboard
                 </h1>
               </div>
               <div className="flex items-center">
                 <button
-                  onClick={() => router.push("/su-dashboard/manage-users")}
+                  onClick={() => router.push("/admin-dashboard/view-customers")}
                   className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                 >
-                  Back to Users
+                  Back to Customers
                 </button>
               </div>
             </div>
@@ -246,13 +243,13 @@ export default function EditUserPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <h3 className="mt-2 text-sm font-medium text-gray-900">Error</h3>
-                  <p className="mt-1 text-sm text-gray-500">User not found</p>
+                  <p className="mt-1 text-sm text-gray-500">Customer not found</p>
                   <div className="mt-6">
                     <button
-                      onClick={() => router.push("/su-dashboard/manage-users")}
+                      onClick={() => router.push("/admin-dashboard/view-customers")}
                       className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                      Back to Users
+                      Back to Customers
                     </button>
                   </div>
                 </div>
@@ -271,15 +268,15 @@ export default function EditUserPage() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                SmartKartMGM - SU Dashboard
+                SmartKartMGM - Admin Dashboard
               </h1>
             </div>
             <div className="flex items-center">
               <button
-                onClick={() => router.push("/su-dashboard/manage-users")}
+                onClick={() => router.push("/admin-dashboard/view-customers")}
                 className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
-                Back to Users
+                Back to Customers
               </button>
             </div>
           </div>
@@ -291,7 +288,7 @@ export default function EditUserPage() {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6 text-blue-600">
-                Edit User: {user.User}
+                Edit Customer: {customer.Customer}
               </h3>
 
               {error && (
@@ -374,17 +371,21 @@ export default function EditUserPage() {
                     <label className="block text-sm font-medium text-gray-700">Locality</label>
                     <select
                       value={formData.locality}
-                      onChange={(e) => setFormData({ ...formData, locality: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        console.log('Locality dropdown changed:', e.target.value);
+                        setFormData({ ...formData, locality: parseInt(e.target.value) || 0 });
+                      }}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                       disabled={localities.length === 0}
                     >
                       <option value="0" className="text-gray-700 bg-white">{localities.length === 0 ? 'Loading...' : 'Select Locality'}</option>
                       {localities.map(locality => (
-                        <option key={locality.LocalityId} value={locality.LocalityId} className="text-gray-900 bg-white">
+                        <option key={`locality-${locality.LocalityId}`} value={locality.LocalityId} className="text-gray-900 bg-white">
                           {locality.Locality}
                         </option>
                       ))}
                     </select>
+
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Rank</label>
@@ -413,7 +414,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Record Creation Time</label>
                       <input
                         type="text"
-                        value={user?.RecordCreationTimeStamp || ''}
+                        value={customer?.RecordCreationTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -422,7 +423,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Record Creation Login</label>
                       <input
                         type="text"
-                        value={user?.RecordCreationLogin || ''}
+                        value={customer?.RecordCreationLogin || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -431,7 +432,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Last Update Time</label>
                       <input
                         type="text"
-                        value={user?.LastUpdationTimeStamp || ''}
+                        value={customer?.LastUpdationTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -440,7 +441,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Last Update Login</label>
                       <input
                         type="text"
-                        value={user?.LastUpdationLogin || ''}
+                        value={customer?.LastUpdationLogin || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -449,7 +450,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Verification Time</label>
                       <input
                         type="text"
-                        value={user?.VerificationTimeStamp || ''}
+                        value={customer?.VerificationTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -458,7 +459,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Activation Time</label>
                       <input
                         type="text"
-                        value={user?.ActivationTimeStamp || ''}
+                        value={customer?.ActivationTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -467,7 +468,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Blacklist Time</label>
                       <input
                         type="text"
-                        value={user?.BlackListTimeStamp || ''}
+                        value={customer?.BlackListTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -476,7 +477,7 @@ export default function EditUserPage() {
                       <label className="block text-sm font-medium text-gray-700">Death Time</label>
                       <input
                         type="text"
-                        value={user?.DeadTimeStamp || ''}
+                        value={customer?.DeadTimeStamp || ''}
                         readOnly
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100"
                       />
@@ -485,54 +486,6 @@ export default function EditUserPage() {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Is SU</label>
-                    <select
-                      value={formData.isSU}
-                      onChange={(e) => setFormData({ ...formData, isSU: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Unset</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Is Admin</label>
-                    <select
-                      value={formData.isAdmin}
-                      onChange={(e) => setFormData({ ...formData, isAdmin: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Unset</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Is Vendor</label>
-                    <select
-                      value={formData.isVendor}
-                      onChange={(e) => setFormData({ ...formData, isVendor: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Unset</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Is Courier</label>
-                    <select
-                      value={formData.isCourier}
-                      onChange={(e) => setFormData({ ...formData, isCourier: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Unset</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </select>
-                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Is Verified</label>
                     <select
@@ -581,12 +534,24 @@ export default function EditUserPage() {
                       <option value="N">No</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Is Deleted</label>
+                    <select
+                      value={formData.isDeleted}
+                      onChange={(e) => setFormData({ ...formData, isDeleted: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Unset</option>
+                      <option value="Y">Yes</option>
+                      <option value="N">No</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => router.push("/su-dashboard/manage-users")}
+                    onClick={() => router.push("/admin-dashboard/view-customers")}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                   >
                     Cancel

@@ -20,39 +20,31 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useForm } from 'react-hook-form';
 import { useState as useReactState } from 'react';
 import { validateCustomerAuth, performCustomerLogout, getCustomerFromToken } from '../utils/auth';
+import { useAuth } from '@/components/AuthContext';
 
 export function Navbar() {
   const API = process.env.NEXT_PUBLIC_API_URL;
   
+  const { isLoggedIn, customer, logout } = useAuth();
   const [cartItemCount, setCartItemCount] = useState(0);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [customer, setCustomer] = useState<any>(null);
   // Removed modal states since we're using separate pages now
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     // Validate customer authentication on component mount
-    const isAuthenticated = validateCustomerAuth();
-    setIsLoggedIn(isAuthenticated);
-    
-    if (isAuthenticated) {
-      // Get customer info from token
-      const customerData = getCustomerFromToken();
-      setCustomer(customerData);
-      
+    if (isLoggedIn && customer) {
       // Fetch cart count for logged-in customer
       const token = localStorage.getItem('token');
       if (token) {
         fetchCartCount(token);
       }
     } else {
-      setCustomer(null);
       setCartItemCount(0);
     }
     
     // Fetch categories
     fetchCategories();
-  }, []);
+  }, [isLoggedIn, customer]);
 
   async function fetchCategories() {
     try {
@@ -106,6 +98,7 @@ export function Navbar() {
 
   function handleLogout() {
     performCustomerLogout('/');
+    logout();
   }
 
   // Removed modal form states and handlers since we're using separate pages now

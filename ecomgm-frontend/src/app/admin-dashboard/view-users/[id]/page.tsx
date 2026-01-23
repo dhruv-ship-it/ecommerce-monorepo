@@ -68,13 +68,17 @@ export default function EditUserPage() {
 
   useEffect(() => {
     if (user) {
+      console.log('Setting form data with user.Locality:', user.Locality, 'Type:', typeof user.Locality);
+      const localityValue = user.Locality || 0;
+      console.log('Final locality value:', localityValue, 'Type:', typeof localityValue);
+      
       setFormData({
         name: user.User,
         gender: user.Gender,
         mobile: user.UserMobile,
         email: user.UserEmail,
         pin: user.PIN,
-        locality: user.Locality || 0,
+        locality: localityValue,
         dob: user.DoB,
         rank: user.UserRank || 0,
         address: user.Address,
@@ -108,7 +112,7 @@ export default function EditUserPage() {
       }
 
       const userId = params.id;
-      const response = await fetch(`http://localhost:4000/su/user/${userId}`, {
+      const response = await fetch(`http://localhost:4000/admin/user/${userId}`, {
         headers: {
           Authorization: `Bearer ${validToken.token}`,
         },
@@ -165,7 +169,7 @@ export default function EditUserPage() {
         return;
       }
 
-      const response = await fetch(`http://localhost:4000/su/user/${user?.UserId}`, {
+      const response = await fetch(`http://localhost:4000/admin/user/${user?.UserId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -222,12 +226,12 @@ export default function EditUserPage() {
             <div className="flex justify-between h-16">
               <div className="flex items-center">
                 <h1 className="text-xl font-semibold text-gray-900">
-                  SmartKartMGM - SU Dashboard
+                  SmartKartMGM - Admin Dashboard
                 </h1>
               </div>
               <div className="flex items-center">
                 <button
-                  onClick={() => router.push("/su-dashboard/manage-users")}
+                  onClick={() => router.push("/admin-dashboard/view-users")}
                   className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                 >
                   Back to Users
@@ -249,7 +253,7 @@ export default function EditUserPage() {
                   <p className="mt-1 text-sm text-gray-500">User not found</p>
                   <div className="mt-6">
                     <button
-                      onClick={() => router.push("/su-dashboard/manage-users")}
+                      onClick={() => router.push("/admin-dashboard/view-users")}
                       className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       Back to Users
@@ -271,12 +275,12 @@ export default function EditUserPage() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">
-                SmartKartMGM - SU Dashboard
+                SmartKartMGM - Admin Dashboard
               </h1>
             </div>
             <div className="flex items-center">
               <button
-                onClick={() => router.push("/su-dashboard/manage-users")}
+                onClick={() => router.push("/admin-dashboard/view-users")}
                 className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
                 Back to Users
@@ -586,7 +590,7 @@ export default function EditUserPage() {
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => router.push("/su-dashboard/manage-users")}
+                    onClick={() => router.push("/admin-dashboard/view-users")}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                   >
                     Cancel

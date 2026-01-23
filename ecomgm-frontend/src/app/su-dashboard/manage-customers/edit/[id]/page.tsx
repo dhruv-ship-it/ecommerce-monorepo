@@ -127,7 +127,18 @@ export default function EditCustomerPage() {
       const response = await fetch("http://localhost:4000/api/localities");
       if (response.ok) {
         const data = await response.json();
-        setLocalities(Array.isArray(data.localities) ? data.localities : []);
+        // Define type for incoming data
+        interface ApiLocality {
+          id: number;
+          name: string;
+        }
+        const localitiesArray = Array.isArray(data.localities) ? data.localities : [];
+        // Transform the API response to match the Locality interface
+        const transformedLocalities: Locality[] = localitiesArray.map((loc: ApiLocality) => ({
+          LocalityId: loc.id,
+          Locality: loc.name
+        }));
+        setLocalities(transformedLocalities);
       }
     } catch (err) {
       console.error("Error fetching localities:", err);
@@ -353,11 +364,12 @@ export default function EditCustomerPage() {
                     <select
                       value={formData.locality}
                       onChange={(e) => setFormData({ ...formData, locality: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                      disabled={localities.length === 0}
                     >
-                      <option value="0">Select Locality</option>
+                      <option value="0" className="text-gray-700 bg-white">{localities.length === 0 ? 'Loading...' : 'Select Locality'}</option>
                       {localities.map(locality => (
-                        <option key={locality.LocalityId} value={locality.LocalityId}>
+                        <option key={locality.LocalityId} value={locality.LocalityId} className="text-gray-900 bg-white">
                           {locality.Locality}
                         </option>
                       ))}
