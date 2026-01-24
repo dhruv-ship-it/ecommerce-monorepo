@@ -283,7 +283,7 @@ export default function EditCourierProfile() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Profile Edit Form */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Personal Information</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Personal Information</h2>
             
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -435,7 +435,7 @@ export default function EditCourierProfile() {
 
           {/* Password Change Section */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Security Settings</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Security Settings</h2>
             
             {!changingPassword ? (
               <div className="text-center py-8">
