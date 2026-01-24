@@ -997,4 +997,21 @@ MariaDB [ecomv1]> desc continent;
 +-------------------------+--------------+------+-----+---------------------+-------------------------------+
 7 rows in set (0.036 sec)
 
+MariaDB [ecomv1]>MariaDB [ecomv1]> desc su;
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| Field                   | Type            | Null | Key | Default             | Extra                         |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+| SUId                    | int(8) unsigned | NO   | PRI | NULL                | auto_increment                |
+| SU                      | varchar(50)     | NO   | UNI | NULL                |                               |
+| Passwd                  | varchar(100)    | NO   |     |                     |                               |
+| IsBlackListed           | char(1)         | NO   |     |                     |                               |
+| IsDead                  | char(1)         | NO   |     |                     |                               |
+| IsDeleted               | char(1)         | NO   |     |                     |                               |
+| RecordCreationTimeStamp | datetime        | NO   |     | current_timestamp() |                               |
+| RecordCreationLogin     | varchar(10)     | NO   |     |                     |                               |
+| LastUpdationTimeStamp   | datetime        | NO   |     | current_timestamp() | on update current_timestamp() |
+| LastUpdationLogin       | varchar(10)     | NO   |     |                     |                               |
++-------------------------+-----------------+------+-----+---------------------+-------------------------------+
+10 rows in set (0.029 sec)
+
 MariaDB [ecomv1]>

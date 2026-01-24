@@ -5,24 +5,16 @@ import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
 interface UserProfile {
-  UserId: number;
-  User: string;
-  UserEmail: string;
-  UserMobile: string;
-  Gender: string;
-  PIN: string;
-  Locality: string;
-  DoB: string;
-  UserRank: string;
-  Address: string;
-  IsSU: string;
-  IsAdmin: string;
-  IsVendor: string;
-  IsCourier: string;
-  IsVerified: string;
-  IsActivated: string;
+  SUId: number;
+  SU: string;
+  Passwd: string;
   IsBlackListed: string;
   IsDead: string;
+  IsDeleted: string;
+  RecordCreationTimeStamp: string;
+  RecordCreationLogin: string;
+  LastUpdationTimeStamp: string;
+  LastUpdationLogin: string;
 }
 
 export default function SUProfile() {
@@ -35,14 +27,6 @@ export default function SUProfile() {
   
   // Form state
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [address, setAddress] = useState("");
-  const [gender, setGender] = useState("");
-  const [dob, setDob] = useState("");
-  const [pin, setPin] = useState("");
-  const [locality, setLocality] = useState("");
-  const [rank, setRank] = useState("");
   
   // Password change state
   const [changingPassword, setChangingPassword] = useState(false);
@@ -67,7 +51,8 @@ export default function SUProfile() {
           return;
         }
         
-        const response = await fetch("http://localhost:4000/api/user/profile", {
+        // Use SU profile endpoint instead of user profile endpoint
+        const response = await fetch("http://localhost:4000/su/profile", {
           headers: {
             Authorization: `Bearer ${validToken.token}`,
           },
@@ -77,15 +62,7 @@ export default function SUProfile() {
           const data = await response.json();
           setUser(data.user);
           // Set form values
-          setName(data.user.User || "");
-          setEmail(data.user.UserEmail || "");
-          setMobile(data.user.UserMobile || "");
-          setAddress(data.user.Address || "");
-          setGender(data.user.Gender || "");
-          setDob(data.user.DoB || "");
-          setPin(data.user.PIN || "");
-          setLocality(data.user.Locality || "");
-          setRank(data.user.UserRank || "");
+          setName(data.user.SU || "");
         } else if (response.status === 401) {
           performAutoLogout("/");
         } else {
@@ -116,7 +93,8 @@ export default function SUProfile() {
         return;
       }
       
-      const response = await fetch("http://localhost:4000/api/user/profile", {
+      // Use SU profile endpoint for updates
+      const response = await fetch("http://localhost:4000/su/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -124,14 +102,6 @@ export default function SUProfile() {
         },
         body: JSON.stringify({
           name: name || undefined,
-          email: email || undefined,
-          mobile: mobile || undefined,
-          address: address || undefined,
-          gender: gender || undefined,
-          dob: dob || undefined,
-          pin: pin || undefined,
-          locality: locality || undefined,
-          rank: rank || undefined,
         }),
       });
       
@@ -142,15 +112,7 @@ export default function SUProfile() {
         if (user) {
           setUser({
             ...user,
-            User: name || user.User,
-            UserEmail: email || user.UserEmail,
-            UserMobile: mobile || user.UserMobile,
-            Address: address || user.Address,
-            Gender: gender || user.Gender,
-            DoB: dob || user.DoB,
-            PIN: pin || user.PIN,
-            Locality: locality || user.Locality,
-            UserRank: rank || user.UserRank,
+            SU: name || user.SU,
           });
         }
         setEditing(false);
@@ -186,7 +148,8 @@ export default function SUProfile() {
         return;
       }
       
-      const response = await fetch("http://localhost:4000/api/user/password", {
+      // Use SU password endpoint for password changes
+      const response = await fetch("http://localhost:4000/su/password", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -264,14 +227,6 @@ export default function SUProfile() {
                 <h3 className="text-lg leading-6 font-medium text-gray-900">
                   Super User Profile
                 </h3>
-                {!editing && !changingPassword && (
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                  >
-                    Edit Profile
-                  </button>
-                )}
               </div>
               
               {error && (
@@ -290,90 +245,66 @@ export default function SUProfile() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Name</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.User || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Username</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.SU || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Email</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.UserEmail || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Account ID</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.SUId || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Mobile</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.UserMobile || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Account Status</label>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {user?.IsBlackListed === 'Y' ? 'Blacklisted' : 'Active'} 
+                        {user?.IsDead === 'Y' ? ', Deactivated' : ''}
+                        {user?.IsDeleted === 'Y' ? ', Deleted' : ''}
+                      </p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Gender</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.Gender || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Is Blacklisted</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.IsBlackListed || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.DoB || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Is Dead</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.IsDead || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">PIN</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.PIN || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Is Deleted</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.IsDeleted || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Locality</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.Locality || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Created At</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.RecordCreationTimeStamp || "N/A"}</p>
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Rank</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.UserRank || "N/A"}</p>
+                      <label className="block text-sm font-medium text-gray-900">Created By</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.RecordCreationLogin || "N/A"}</p>
                     </div>
                     
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700">Address</label>
-                      <p className="mt-1 text-sm text-gray-900">{user?.Address || "N/A"}</p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900">Last Updated</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.LastUpdationTimeStamp || "N/A"}</p>
                     </div>
-                  </div>
-                  
-                  <div className="border-t border-gray-200 pt-6">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Account Status</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h5 className="text-sm font-medium text-gray-700">SU Status</h5>
-                        <p className="mt-1 text-sm font-medium text-gray-900">
-                          {user?.IsSU === 'Y' ? 'Active SU' : 'Not an SU'}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h5 className="text-sm font-medium text-gray-700">Admin Status</h5>
-                        <p className="mt-1 text-sm font-medium text-gray-900">
-                          {user?.IsAdmin === 'Y' ? 'Active Admin' : 'Not an Admin'}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h5 className="text-sm font-medium text-gray-700">Vendor Status</h5>
-                        <p className="mt-1 text-sm font-medium text-gray-900">
-                          {user?.IsVendor === 'Y' ? 'Active Vendor' : 'Not a Vendor'}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h5 className="text-sm font-medium text-gray-700">Courier Status</h5>
-                        <p className="mt-1 text-sm font-medium text-gray-900">
-                          {user?.IsCourier === 'Y' ? 'Active Courier' : 'Not a Courier'}
-                        </p>
-                      </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900">Updated By</label>
+                      <p className="mt-1 text-sm text-gray-900">{user?.LastUpdationLogin || "N/A"}</p>
                     </div>
                   </div>
                   
                   <div className="flex justify-end space-x-3 pt-6">
                     <button
-                      onClick={() => setChangingPassword(true)}
-                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                      onClick={() => router.push('/su-dashboard/profile/edit')}  // Navigate to edit page instead of inline editing
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                     >
-                      Change Password
+                      Edit Profile
                     </button>
                   </div>
                 </div>
@@ -381,96 +312,12 @@ export default function SUProfile() {
                 <form onSubmit={handleUpdateProfile} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <label className="block text-sm font-medium text-gray-700">Username</label>
                       <input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Email</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Mobile</label>
-                      <input
-                        type="text"
-                        value={mobile}
-                        onChange={(e) => setMobile(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Gender</label>
-                      <select
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      >
-                        <option value="">Select Gender</option>
-                        <option value="M">Male</option>
-                        <option value="F">Female</option>
-                        <option value="O">Other</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-                      <input
-                        type="date"
-                        value={dob}
-                        onChange={(e) => setDob(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">PIN</label>
-                      <input
-                        type="text"
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Locality</label>
-                      <input
-                        type="text"
-                        value={locality}
-                        onChange={(e) => setLocality(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Rank</label>
-                      <input
-                        type="text"
-                        value={rank}
-                        onChange={(e) => setRank(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700">Address</label>
-                      <textarea
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        rows={3}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 bg-white"
                       />
                     </div>
                   </div>
@@ -482,15 +329,7 @@ export default function SUProfile() {
                         setEditing(false);
                         // Reset form values to original
                         if (user) {
-                          setName(user.User || "");
-                          setEmail(user.UserEmail || "");
-                          setMobile(user.UserMobile || "");
-                          setAddress(user.Address || "");
-                          setGender(user.Gender || "");
-                          setDob(user.DoB || "");
-                          setPin(user.PIN || "");
-                          setLocality(user.Locality || "");
-                          setRank(user.UserRank || "");
+                          setName(user.SU || "");
                         }
                       }}
                       className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
@@ -523,7 +362,7 @@ export default function SUProfile() {
                         value={oldPassword}
                         onChange={(e) => setOldPassword(e.target.value)}
                         required
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 bg-white"
                       />
                     </div>
                     
@@ -534,7 +373,7 @@ export default function SUProfile() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 bg-white"
                       />
                     </div>
                     
@@ -545,7 +384,7 @@ export default function SUProfile() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900 bg-white"
                       />
                     </div>
                   </div>

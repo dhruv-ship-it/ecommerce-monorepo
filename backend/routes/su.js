@@ -22,6 +22,91 @@ function suOnlyMiddleware(req, res, next) {
   return res.status(403).json({ error: 'Forbidden' });
 }
 
+// Get SU profile
+router.get('/profile', authMiddleware, suOnlyMiddleware, async (req, res) => {
+  try {
+    const conn = await db.getConnection();
+    const [su] = await conn.query(`SELECT SUId, SU, Passwd, IsBlackListed, IsDead, IsDeleted, RecordCreationTimeStamp, RecordCreationLogin, LastUpdationTimeStamp, LastUpdationLogin FROM SU WHERE SUId = ?`, [req.user.id]);
+    conn.release();
+    if (!su) return res.status(404).json({ error: 'SU user not found' });
+    res.json({ user: su });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update SU profile
+router.put('/profile', authMiddleware, suOnlyMiddleware, async (req, res) => {
+  const { SU, IsBlackListed, IsDead } = req.body;
+  if (!SU && !IsBlackListed && !IsDead) return res.status(400).json({ error: 'No fields to update' });
+  try {
+    const conn = await db.getConnection();
+    
+    // Check if name is taken by another SU (if updating name)
+    if (SU) {
+      const [existing] = await conn.query('SELECT SUId FROM SU WHERE SU = ? AND SUId != ?', [SU, req.user.id]);
+      if (existing && existing.length > 0) {
+        conn.release();
+        return res.status(400).json({ error: 'Name already in use' });
+      }
+    }
+    
+    // Build update query
+    const updates = [];
+    const params = [];
+    
+    if (SU !== undefined) {
+      updates.push('SU = ?');
+      params.push(SU);
+    }
+    if (IsBlackListed !== undefined) {
+      updates.push('IsBlackListed = ?');
+      params.push(IsBlackListed || '');  // Convert null to empty string
+    }
+    if (IsDead !== undefined) {
+      updates.push('IsDead = ?');
+      params.push(IsDead || '');  // Convert null to empty string
+    }
+    
+    params.push(req.user.id); // WHERE clause parameter
+    
+    await conn.query(
+      `UPDATE SU SET ${updates.join(', ')} WHERE SUId = ?`,
+      params
+    );
+    conn.release();
+    res.json({ message: 'Profile updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+    console.error(err);
+  }
+});
+
+// Update SU password
+router.put('/password', authMiddleware, suOnlyMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const conn = await db.getConnection();
+    const [su] = await conn.query('SELECT Passwd FROM SU WHERE SUId = ?', [req.user.id]);
+    if (!su) {
+      conn.release();
+      return res.status(404).json({ error: 'SU user not found' });
+    }
+    const valid = await bcrypt.compare(oldPassword, su.Passwd);
+    if (!valid) {
+      conn.release();
+      return res.status(400).json({ error: 'Old password incorrect' });
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await conn.query('UPDATE SU SET Passwd = ? WHERE SUId = ?', [hashed, req.user.id]);
+    conn.release();
+    res.json({ message: 'Password updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Create a new user (admin, vendor, courier)
 router.post('/user', authMiddleware, suOnlyMiddleware, async (req, res) => {
   const { name, gender, mobile, email, pin, dob, address, password, role, locality = 0, rank = 0, isVerified = 'N', isActivated = 'N' } = req.body;
@@ -83,7 +168,7 @@ router.get('/user/:id', authMiddleware, suOnlyMiddleware, async (req, res) => {
 router.get('/users', authMiddleware, suOnlyMiddleware, async (req, res) => {
   try {
     const conn = await db.getConnection();
-    const users = await conn.query('SELECT UserId, User, UserEmail, Gender, UserMobile, PIN, Locality, DoB, UserRank, Address, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted FROM User');
+    const users = await conn.query('SELECT UserId, User, UserEmail, Gender, UserMobile, PIN, Locality, UserRank, Address, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted FROM User');
     conn.release();
     res.json({ users });
   } catch (err) {
@@ -254,4 +339,4 @@ router.put('/customer/:id', authMiddleware, suOnlyMiddleware, async (req, res) =
   }
 });
 
-export default router; 
+export default router;

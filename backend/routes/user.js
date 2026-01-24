@@ -28,7 +28,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     if (!userId) return res.status(400).json({ error: 'User ID missing in token' });
     const conn = await db.getConnection();
-    const [user] = await conn.query(`SELECT UserId, User, Gender, UserMobile, UserEmail, Address, DoB, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted, UserRank, Locality, RecordCreationTimeStamp, LastUpdationTimeStamp, VerificationTimeStamp FROM user WHERE UserId = ?`, [userId]);
+    const [user] = await conn.query(`SELECT UserId, User, Gender, UserMobile, UserEmail, Address, DoB, IsSU, IsAdmin, IsVendor, IsCourier, IsVerified, IsActivated, IsBlackListed, IsDead, IsDeleted, UserRank, Locality, PIN, RecordCreationTimeStamp, LastUpdationTimeStamp, VerificationTimeStamp FROM user WHERE UserId = ?`, [userId]);
     conn.release();
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
@@ -39,26 +39,27 @@ router.get('/profile', authMiddleware, async (req, res) => {
 
 // Update user profile (name, email, profile image, address, etc.)
 router.put('/profile', authMiddleware, async (req, res) => {
-  const { name, email, gender, mobile, dob, address, profile_image } = req.body;
-  if (!name && !email && !gender && !mobile && !dob && !address && !profile_image) return res.status(400).json({ error: 'No fields to update' });
+  const { name, email, gender, mobile, dob, address, profile_image, locality, rank, pin } = req.body;
+  if (!name && !email && !gender && !mobile && !dob && !address && !profile_image && !locality && !rank && !pin) return res.status(400).json({ error: 'No fields to update' });
   try {
     const conn = await db.getConnection();
     if (email) {
       // Check if email is taken by another user
       const [existing] = await conn.query('SELECT UserId FROM user WHERE UserEmail = ? AND UserId != ?', [email, req.user.id]);
-      if (existing) {
+      if (existing.length > 0) {
         conn.release();
         return res.status(400).json({ error: 'Email already in use' });
       }
     }
     await conn.query(
-      'UPDATE user SET User = COALESCE(?, User), UserEmail = COALESCE(?, UserEmail), Gender = COALESCE(?, Gender), UserMobile = COALESCE(?, UserMobile), DoB = COALESCE(?, DoB), Address = COALESCE(?, Address), ProfileImage = COALESCE(?, ProfileImage) WHERE UserId = ?',
-      [name, email, gender, mobile, dob, address, profile_image, req.user.id]
+      'UPDATE user SET User = COALESCE(?, User), UserEmail = COALESCE(?, UserEmail), Gender = COALESCE(?, Gender), UserMobile = COALESCE(?, UserMobile), DoB = COALESCE(?, DoB), Address = COALESCE(?, Address), ProfileImage = COALESCE(?, ProfileImage), Locality = COALESCE(?, Locality), UserRank = COALESCE(?, UserRank), PIN = COALESCE(?, PIN) WHERE UserId = ?',
+      [name, email, gender, mobile, dob, address, profile_image, locality, rank, pin, req.user.id]
     );
     conn.release();
     res.json({ message: 'Profile updated' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+    console.error(err);
   }
 });
 
@@ -99,4 +100,4 @@ router.delete('/:id', authMiddleware, suOrAdminMiddleware, async (req, res) => {
   }
 });
 
-export default router; 
+export default router;
