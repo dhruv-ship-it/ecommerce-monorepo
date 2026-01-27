@@ -145,6 +145,10 @@ Thumbs.db
 *.sqlite3
 **/*.sqlite3
 
+# Database description and cron files
+databasedesc.txt
+dbcron
+
 # Lock files (optional - some prefer to commit these)
 # package-lock.json
 # **/package-lock.json
