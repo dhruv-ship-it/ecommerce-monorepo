@@ -17,7 +17,23 @@ ecom/
 ### Prerequisites
 - Node.js 18+ 
 - MariaDB/MySQL
+- Docker (for Redis caching)
 - Git
+
+### Redis Setup (Required)
+```bash
+# Start Redis container with Docker
+# Redis is used for caching high-traffic endpoints like /models
+# Cache TTL: 5 minutes for optimal performance/staleness balance
+
+docker run -d \
+  --name ecom-redis \
+  -p 6379:6379 \
+  redis:latest
+
+# Verify Redis is running
+docker ps | grep ecom-redis
+```
 
 ### Backend Setup
 ```bash
@@ -85,6 +101,9 @@ DB_PORT=3306
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_NAME=your_database_name
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_TTL=300  # Cache expiration in seconds (5 minutes)
 ```
 
 ### Frontend (`.env.local`)
@@ -118,11 +137,12 @@ npm start        # Production server
 
 ## 🧪 Testing
 
-1. Start backend: `cd backend && npm start`
-2. Start customer frontend: `cd frontend && npm run dev`
-3. Start admin frontend: `cd ecomgm-frontend && npm run dev` (SmartKartMGM Admin Portal)
-4. Test customer signup/login at `http://localhost:3000`
-5. Test admin login at `http://localhost:3001`
+1. Start Redis: `docker run -d --name ecom-redis -p 6379:6379 redis:latest`
+2. Start backend: `cd backend && npm start`
+3. Start customer frontend: `cd frontend && npm run dev`
+4. Start admin frontend: `cd ecomgm-frontend && npm run dev` (SmartKartMGM Admin Portal)
+5. Test customer signup/login at `http://localhost:3000`
+6. Test admin login at `http://localhost:3001`
 
 ## 📁 File Organization
 
@@ -140,11 +160,19 @@ npm start        # Production server
 - **Cart**: `/cart/*` (shopping cart operations)
 - **Orders**: `/order/*` (order management)
 
+## ⚡ Performance & Caching
+
+- **Redis Caching**: High-traffic endpoints like `/models` are cached for 5 minutes
+- **Cache-Aside Pattern**: Metadata cached in Redis, live vendor data fetched separately
+- **Query Optimization**: N+1 patterns eliminated using JOIN queries
+- **Performance Monitoring**: Built-in query counting and metrics logging
+
 ## 🚨 Important Notes
 
 - Each app has its own `node_modules` and dependencies
 - Environment files are gitignored for security
 - Database must be running before starting backend
+- **Redis container must be running before starting backend**
 - CORS is configured for local development origins
 - JWT tokens are role-specific and mutually exclusive
 
