@@ -537,6 +537,8 @@ router.get('/category/:categoryId', async (req, res) => {
 router.get('/:modelId', async (req, res) => {
   const startTime = Date.now();
   let queryCount = 0;
+  let conn;
+  let originalQuery;
   console.log(`[MODEL/ID] Request for model ${req.params.modelId} started at ${new Date().toISOString()}`);
   
   try {
@@ -548,26 +550,48 @@ router.get('/:modelId', async (req, res) => {
       // Use cached metadata and fetch dynamic data separately
       const modelMeta = JSON.parse(cachedMeta);
       
-      const conn = await db.getConnection();
-      const originalQuery = conn.query;
+      conn = await db.getConnection();
+      originalQuery = conn.query;
       conn.query = async function(sql, params) {
         queryCount++;
         console.log(`[QUERY ${queryCount}] ${sql.substring(0, 100)}...`);
         return originalQuery.call(this, sql, params);
       };
       
-      // Get products with dynamic vendor data
-      const products = await conn.query(`
+      // Get all products with images and vendor data in a single optimized query
+      const productsData = await conn.query(`
         SELECT 
-          p.*,
+          p.ProductId,
+          p.Product,
+          p.Model,
+          p.MRP,
+          p.ProductCategory_Gen,
+          p.ProductSubCategory,
+          p.Color,
+          p.Size,
+          p.Shape,
+          p.Unit,
+          p.Currency,
+          p.IsDeleted,
           pc.ProductCategoryId,
           pc.ProductCategory,
           psc.ProductSubCategory AS ProductSubCategoryName,
           c.Color AS ColorName,
-          s.Size AS SizeName,
+          CASE WHEN p.Size = 0 THEN 'One Size' ELSE s.Size END AS SizeName,
           sh.Shape AS ShapeName,
           u.Unit AS UnitName,
-          cur.Currency AS CurrencyName
+          cur.Currency AS CurrencyName,
+          pi.ImageType,
+          pi.ImagePath,
+          pi.ImageOrder,
+          vp.VendorProductId,
+          vp.Vendor,
+          vp.StockQty,
+          vp.Discount,
+          vp.GST_SS,
+          vp.MRP_SS,
+          vp.isNotAvailable,
+          usr.User as VendorName
         FROM Product p
         LEFT JOIN ProductCategory pc ON p.ProductCategory_Gen = pc.ProductCategoryId
         LEFT JOIN ProductSubCategory psc ON p.ProductSubCategory = psc.ProductSubCategoryId
@@ -576,45 +600,99 @@ router.get('/:modelId', async (req, res) => {
         LEFT JOIN Shape sh ON p.Shape = sh.ShapeId
         LEFT JOIN Unit u ON p.Unit = u.UnitId
         LEFT JOIN Currency cur ON p.Currency = cur.CurrencyId
-        WHERE p.Model = ? AND (p.IsDeleted = '' OR p.IsDeleted = 'N')
-        ORDER BY p.ProductId
+        LEFT JOIN product_images pi ON p.ProductId = pi.ProductId
+        LEFT JOIN VendorProduct vp ON p.ProductId = vp.Product
+        LEFT JOIN User usr ON vp.Vendor = usr.UserId
+        WHERE p.Model = ? AND p.IsDeleted = 'N'
+        AND (pi.IsActive = 'Y' OR pi.IsActive IS NULL)
+        AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL)
+        AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
+        ORDER BY p.ProductId, pi.ImageOrder, vp.VendorProductId
       `, [req.params.modelId]);
       
-      // Get images for each product
-      for (let product of products) {
-        const images = await conn.query(`
-          SELECT ImageType, ImagePath, ImageOrder 
-          FROM product_images 
-          WHERE ProductId = ? AND IsActive = 'Y' 
-          ORDER BY ImageOrder
-        `, [product.ProductId]);
+      // Process the flat result into the hierarchical structure
+      const productsMap = new Map();
+      
+      for (const row of productsData) {
+        if (!productsMap.has(row.ProductId)) {
+          // Create product object with basic info
+          productsMap.set(row.ProductId, {
+            ProductId: row.ProductId,
+            Product: row.Product,
+            Model: row.Model,
+            MRP: row.MRP,
+            ProductCategory_Gen: row.ProductCategory_Gen,
+            ProductSubCategory: row.ProductSubCategory,
+            Color: row.Color,
+            Size: row.Size,
+            Shape: row.Shape,
+            Unit: row.Unit,
+            Currency: row.Currency,
+            IsWaterResistant: row.IsWaterResistant,
+            IsFireProof: row.IsFireProof,
+            IsEcoFriendly: row.IsEcoFriendly,
+            IsRecyclable: row.IsRecyclable,
+            Warranty: row.Warranty,
+            Guarantee: row.Guarantee,
+            CreatedAt: row.CreatedAt,
+            UpdatedAt: row.UpdatedAt,
+            IsDeleted: row.IsDeleted,
+            IsBlackListed: row.IsBlackListed,
+            IsApproved: row.IsApproved,
+            ProductCategoryId: row.ProductCategoryId,
+            ProductCategory: row.ProductCategory,
+            ProductSubCategoryName: row.ProductSubCategoryName,
+            ColorName: row.ColorName,
+            SizeName: row.SizeName,
+            ShapeName: row.ShapeName,
+            UnitName: row.UnitName,
+            CurrencyName: row.CurrencyName,
+            images: [],
+            thumbnail: '/placeholder.svg',
+            mainImage: '/placeholder.svg',
+            galleryImages: [],
+            vendorProducts: []
+          });
+        }
         
-        product.images = images;
-        product.thumbnail = images.find(img => img.ImageType === 'thumbnail')?.ImagePath || '/placeholder.svg';
-        product.mainImage = images.find(img => img.ImageType === 'main')?.ImagePath || '/placeholder.svg';
-        product.galleryImages = images.filter(img => img.ImageType === 'gallery').map(img => img.ImagePath);
+        const product = productsMap.get(row.ProductId);
+        
+        // Add image if present
+        if (row.ImagePath) {
+          const imageObj = {
+            ImageType: row.ImageType,
+            ImagePath: row.ImagePath,
+            ImageOrder: row.ImageOrder
+          };
+          product.images.push(imageObj);
+          
+          if (row.ImageType === 'thumbnail') {
+            product.thumbnail = row.ImagePath;
+          } else if (row.ImageType === 'main') {
+            product.mainImage = row.ImagePath;
+          } else if (row.ImageType === 'gallery') {
+            product.galleryImages.push(row.ImagePath);
+          }
+        }
+        
+        // Add vendor product if present
+        if (row.VendorProductId) {
+          product.vendorProducts.push({
+            VendorProductId: row.VendorProductId,
+            Product: row.Product,
+            Vendor: row.Vendor,
+            StockQty: row.StockQty,
+            Discount: row.Discount,
+            GST_SS: row.GST_SS,
+            MRP_SS: row.MRP_SS,
+            isNotAvailable: row.isNotAvailable,
+            VendorName: row.VendorName
+          });
+        }
       }
       
-      // Get vendor product information for each product
-      for (let product of products) {
-        const vendorProducts = await conn.query(`
-          SELECT 
-            vp.VendorProductId,
-            vp.Product,
-            vp.Vendor,
-            vp.StockQty,
-            vp.Discount,
-            vp.GST_SS,
-            vp.MRP_SS,
-            vp.isNotAvailable,
-            u.User as VendorName
-          FROM VendorProduct vp
-          LEFT JOIN User u ON vp.Vendor = u.UserId
-          WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' AND vp.IsNotAvailable != 'Y')
-        `, [product.ProductId]);
-        
-        product.vendorProducts = vendorProducts;
-      }
+      // Convert map to array
+      const products = Array.from(productsMap.values());
       
       // Restore original query method
       conn.query = originalQuery;
@@ -630,8 +708,8 @@ router.get('/:modelId', async (req, res) => {
     }
     
     // CACHE MISS - fetch all data and cache the metadata
-    const conn = await db.getConnection();
-    const originalQuery = conn.query;
+    conn = await db.getConnection();
+    originalQuery = conn.query;
     conn.query = async function(sql, params) {
       queryCount++;
       console.log(`[QUERY ${queryCount}] ${sql.substring(0, 100)}...`);
@@ -664,18 +742,40 @@ router.get('/:modelId', async (req, res) => {
       model.MaterialName = 'N/A';
     }
     
-    // Get all products for this model with complete information
-    const products = await conn.query(`
+    // Get all products with images and vendor data in a single optimized query
+    const productsData = await conn.query(`
       SELECT 
-        p.*,
+        p.ProductId,
+        p.Product,
+        p.Model,
+        p.MRP,
+        p.ProductCategory_Gen,
+        p.ProductSubCategory,
+        p.Color,
+        p.Size,
+        p.Shape,
+        p.Unit,
+        p.Currency,
+        p.IsDeleted,
         pc.ProductCategoryId,
         pc.ProductCategory,
         psc.ProductSubCategory AS ProductSubCategoryName,
         c.Color AS ColorName,
-        s.Size AS SizeName,
+        CASE WHEN p.Size = 0 THEN 'One Size' ELSE s.Size END AS SizeName,
         sh.Shape AS ShapeName,
         u.Unit AS UnitName,
-        cur.Currency AS CurrencyName
+        cur.Currency AS CurrencyName,
+        pi.ImageType,
+        pi.ImagePath,
+        pi.ImageOrder,
+        vp.VendorProductId,
+        vp.Vendor,
+        vp.StockQty,
+        vp.Discount,
+        vp.GST_SS,
+        vp.MRP_SS,
+        vp.isNotAvailable,
+        usr.User as VendorName
       FROM Product p
       LEFT JOIN ProductCategory pc ON p.ProductCategory_Gen = pc.ProductCategoryId
       LEFT JOIN ProductSubCategory psc ON p.ProductSubCategory = psc.ProductSubCategoryId
@@ -684,24 +784,89 @@ router.get('/:modelId', async (req, res) => {
       LEFT JOIN Shape sh ON p.Shape = sh.ShapeId
       LEFT JOIN Unit u ON p.Unit = u.UnitId
       LEFT JOIN Currency cur ON p.Currency = cur.CurrencyId
+      LEFT JOIN product_images pi ON p.ProductId = pi.ProductId
+      LEFT JOIN VendorProduct vp ON p.ProductId = vp.Product
+      LEFT JOIN User usr ON vp.Vendor = usr.UserId
       WHERE p.Model = ? AND p.IsDeleted = 'N'
-      ORDER BY p.ProductId
+      AND (pi.IsActive = 'Y' OR pi.IsActive IS NULL)
+      AND (vp.IsDeleted != 'Y' OR vp.IsDeleted IS NULL)
+      AND (vp.IsNotAvailable != 'Y' OR vp.IsNotAvailable IS NULL)
+      ORDER BY p.ProductId, pi.ImageOrder, vp.VendorProductId
     `, [req.params.modelId]);
     
-    // Get images for each product
-    for (let product of products) {
-      const images = await conn.query(`
-        SELECT ImageType, ImagePath, ImageOrder 
-        FROM product_images 
-        WHERE ProductId = ? AND IsActive = 'Y' 
-        ORDER BY ImageOrder
-      `, [product.ProductId]);
+    // Process the flat result into the hierarchical structure
+    const productsMap = new Map();
+    
+    for (const row of productsData) {
+      if (!productsMap.has(row.ProductId)) {
+        // Create product object with basic info
+        productsMap.set(row.ProductId, {
+          ProductId: row.ProductId,
+          Product: row.Product,
+          Model: row.Model,
+          MRP: row.MRP,
+          ProductCategory_Gen: row.ProductCategory_Gen,
+          ProductSubCategory: row.ProductSubCategory,
+          Color: row.Color,
+          Size: row.Size,
+          Shape: row.Shape,
+          Unit: row.Unit,
+          Currency: row.Currency,
+          IsDeleted: row.IsDeleted,
+          ProductCategoryId: row.ProductCategoryId,
+          ProductCategory: row.ProductCategory,
+          ProductSubCategoryName: row.ProductSubCategoryName,
+          ColorName: row.ColorName,
+          SizeName: row.SizeName,
+          ShapeName: row.ShapeName,
+          UnitName: row.UnitName,
+          CurrencyName: row.CurrencyName,
+          images: [],
+          thumbnail: '/placeholder.svg',
+          mainImage: '/placeholder.svg',
+          galleryImages: [],
+          vendorProducts: []
+        });
+      }
       
-      product.images = images;
-      product.thumbnail = images.find(img => img.ImageType === 'thumbnail')?.ImagePath || '/placeholder.svg';
-      product.mainImage = images.find(img => img.ImageType === 'main')?.ImagePath || '/placeholder.svg';
-      product.galleryImages = images.filter(img => img.ImageType === 'gallery').map(img => img.ImagePath);
+      const product = productsMap.get(row.ProductId);
+      
+      // Add image if present
+      if (row.ImagePath) {
+        const imageObj = {
+          ImageType: row.ImageType,
+          ImagePath: row.ImagePath,
+          ImageOrder: row.ImageOrder
+        };
+        product.images.push(imageObj);
+        
+        if (row.ImageType === 'thumbnail') {
+          product.thumbnail = row.ImagePath;
+        } else if (row.ImageType === 'main') {
+          product.mainImage = row.ImagePath;
+        } else if (row.ImageType === 'gallery') {
+          product.galleryImages.push(row.ImagePath);
+        }
+      }
+      
+      // Add vendor product if present
+      if (row.VendorProductId) {
+        product.vendorProducts.push({
+          VendorProductId: row.VendorProductId,
+          Product: row.Product,
+          Vendor: row.Vendor,
+          StockQty: row.StockQty,
+          Discount: row.Discount,
+          GST_SS: row.GST_SS,
+          MRP_SS: row.MRP_SS,
+          isNotAvailable: row.isNotAvailable,
+          VendorName: row.VendorName
+        });
+      }
     }
+    
+    // Convert map to array
+    const products = Array.from(productsMap.values());
     
     // Get all available colors and sizes for this model
     const availableColors = await conn.query(`
@@ -733,7 +898,7 @@ router.get('/:modelId', async (req, res) => {
         ProductCategory_Gen: p.ProductCategory_Gen,
         ProductCategory: p.ProductCategory,
         Model: p.Model,
-        Brand: p.Brand,
+
         Color: p.Color,
         ColorName: p.ColorName,
         Size: p.Size,
@@ -759,26 +924,7 @@ router.get('/:modelId', async (req, res) => {
     const cacheTTL = parseInt(process.env.REDIS_TTL) || 300; // 5 minutes default
     await redis.setEx(metaCacheKey, cacheTTL, JSON.stringify(modelMetadata));
     
-    // Get vendor product information for each product (dynamic data)
-    for (let product of products) {
-      const vendorProducts = await conn.query(`
-        SELECT 
-          vp.VendorProductId,
-          vp.Product,
-          vp.Vendor,
-          vp.StockQty,
-          vp.Discount,
-          vp.GST_SS,
-          vp.MRP_SS,
-          vp.isNotAvailable,
-          u.User as VendorName
-        FROM VendorProduct vp
-        LEFT JOIN User u ON vp.Vendor = u.UserId
-        WHERE vp.Product = ? AND (vp.IsDeleted != 'Y' AND vp.IsNotAvailable != 'Y')
-      `, [product.ProductId]);
-      
-      product.vendorProducts = vendorProducts;
-    }
+    // Vendor products are already included in the optimized query
     
     model.products = products;
     model.availableColors = availableColors;
