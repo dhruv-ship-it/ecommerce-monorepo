@@ -1,6 +1,7 @@
 import express from 'express';
 import mariadb from 'mariadb';
 import dotenv from 'dotenv';
+import { invalidateModelCache, invalidateCategoryCache, redis } from '../index.js';
 
 dotenv.config();
 
@@ -710,6 +711,26 @@ router.post('/:entity', adminOnlyMiddleware, async (req, res) => {
       
       const result = await conn.query(query, finalValues);
 
+      // Invalidate cache if model or product was created
+      if (entity === 'model' || entity === 'product') {
+        await invalidateModelCache();
+        // Also invalidate all category caches
+        await invalidateCategoryCache();
+        // Also invalidate model metadata cache if it's a model
+        if (entity === 'model') {
+          // We can't know the exact model ID that was affected, so we'll just invalidate all model metadata
+          try {
+            const modelMetaKeys = await redis.keys('model:meta:*');
+            if (modelMetaKeys.length > 0) {
+              await redis.del(modelMetaKeys);
+              console.log(`[CACHE] Invalidated ${modelMetaKeys.length} model metadata cache keys`);
+            }
+          } catch (err) {
+            console.error('[CACHE] Failed to invalidate model metadata caches:', err);
+          }
+        }
+      }
+
       // Fetch the created record
       const createdRecord = await conn.query(
         `SELECT * FROM ${tableName} WHERE ${primaryKey} = ?`,
@@ -838,6 +859,26 @@ router.put('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
       const query = `UPDATE ${tableName} SET ${setClause} WHERE ${primaryKey} = ?`;
       
       await conn.query(query, [...values, id]);
+
+      // Invalidate cache if model or product was updated
+      if (entity === 'model' || entity === 'product') {
+        await invalidateModelCache();
+        // Also invalidate all category caches
+        await invalidateCategoryCache();
+        // Also invalidate model metadata cache if it's a model
+        if (entity === 'model') {
+          // We can't know the exact model ID that was affected, so we'll just invalidate all model metadata
+          try {
+            const modelMetaKeys = await redis.keys('model:meta:*');
+            if (modelMetaKeys.length > 0) {
+              await redis.del(modelMetaKeys);
+              console.log(`[CACHE] Invalidated ${modelMetaKeys.length} model metadata cache keys`);
+            }
+          } catch (err) {
+            console.error('[CACHE] Failed to invalidate model metadata caches:', err);
+          }
+        }
+      }
 
       // Fetch the updated record
       const updatedRecord = await conn.query(
@@ -972,6 +1013,26 @@ router.delete('/:entity/:id', adminOnlyMiddleware, async (req, res) => {
             dependencies: dependencyIssues,
             message: `This ${entity} is used in ${dependencyIssues.length} other table(s). Please remove or reassign these references first.`
           });
+        }
+      }
+      
+      // Invalidate cache if model or product is being deleted
+      if (entity === 'model' || entity === 'product') {
+        await invalidateModelCache();
+        // Also invalidate all category caches
+        await invalidateCategoryCache();
+        // Also invalidate model metadata cache if it's a model
+        if (entity === 'model') {
+          // We can't know the exact model ID that was affected, so we'll just invalidate all model metadata
+          try {
+            const modelMetaKeys = await redis.keys('model:meta:*');
+            if (modelMetaKeys.length > 0) {
+              await redis.del(modelMetaKeys);
+              console.log(`[CACHE] Invalidated ${modelMetaKeys.length} model metadata cache keys`);
+            }
+          } catch (err) {
+            console.error('[CACHE] Failed to invalidate model metadata caches:', err);
+          }
         }
       }
       

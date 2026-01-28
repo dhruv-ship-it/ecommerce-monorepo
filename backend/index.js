@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createClient } from 'redis';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/user.js';
@@ -146,6 +147,46 @@ export const db = mariadb.createPool({
   database: process.env.DB_NAME,
   connectionLimit: 5,
 });
+
+// Redis client
+export const redis = createClient({
+  host: process.env.REDIS_HOST,
+  port: process.env.REDIS_PORT,
+});
+
+redis.on('error', (err) => {
+  console.error('Redis Client Error', err);
+});
+
+redis.connect().then(() => {
+  console.log('Connected to Redis!');
+}).catch((err) => {
+  console.error('Failed to connect to Redis:', err);
+});
+
+// Cache invalidation utility
+export async function invalidateModelCache() {
+  try {
+    await redis.del('models:all');
+    console.log('[CACHE] Invalidated models:all cache');
+  } catch (err) {
+    console.error('[CACHE] Failed to invalidate cache:', err);
+  }
+}
+
+// Cache invalidation utility for categories
+export async function invalidateCategoryCache() {
+  try {
+    // Delete all category caches
+    const categoryKeys = await redis.keys('models:category:*');
+    if (categoryKeys.length > 0) {
+      await redis.del(categoryKeys);
+      console.log(`[CACHE] Invalidated ${categoryKeys.length} category cache keys`);
+    }
+  } catch (err) {
+    console.error('[CACHE] Failed to invalidate category caches:', err);
+  }
+}
 
 db.getConnection()
   .then(conn => {
