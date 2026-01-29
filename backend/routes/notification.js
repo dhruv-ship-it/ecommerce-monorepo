@@ -134,13 +134,13 @@ router.get('/debug/all', async (req, res) => {
     const [userNotifications] = await conn.query(`
       SELECT * FROM notification_user
       ORDER BY RecordCreationTimeStamp DESC
-      LIMIT 10
+      LIMIT 20
     `);
     
     const [customerNotifications] = await conn.query(`
       SELECT * FROM notification_customer
       ORDER BY RecordCreationTimeStamp DESC
-      LIMIT 10
+      LIMIT 20
     `);
     
     conn.release();
@@ -152,6 +152,43 @@ router.get('/debug/all', async (req, res) => {
   } catch (err) {
     console.error('Error fetching debug notifications:', err);
     res.status(500).json({ error: 'Failed to fetch debug notifications' });
+  }
+});
+
+// Test endpoint to manually create sample notifications
+router.post('/debug/create-sample', async (req, res) => {
+  try {
+    const conn = await db.getConnection();
+    
+    // Create sample customer notification
+    await conn.query(
+      `INSERT INTO notification_customer 
+       (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+       VALUES (?, ?, ?, 'N', NOW())`,
+      [1, 'Test', 'This is a test customer notification']
+    );
+    
+    // Create sample user notifications
+    await conn.query(
+      `INSERT INTO notification_user 
+       (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+       VALUES (?, ?, ?, 'N', NOW())`,
+      [34, 'Test', 'This is a test vendor notification']
+    );
+    
+    await conn.query(
+      `INSERT INTO notification_user 
+       (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+       VALUES (?, ?, ?, 'N', NOW())`,
+      [35, 'Test', 'This is a test courier notification']
+    );
+    
+    conn.release();
+    
+    res.json({ message: 'Sample notifications created successfully' });
+  } catch (err) {
+    console.error('Error creating sample notifications:', err);
+    res.status(500).json({ error: 'Failed to create sample notifications' });
   }
 });
 

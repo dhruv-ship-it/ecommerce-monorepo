@@ -609,9 +609,9 @@ router.post('/order/:id/assign-courier', authMiddleware, vendorOnlyMiddleware, a
       return res.status(400).json({ error: 'Invalid or inactive courier' });
     }
     
-    // Update VendorProductCustomerCourier table - Assign courier directly
+    // Update VendorProductCustomerCourier table - Assign courier (don't mark as picked up yet)
     await conn.query(
-      'UPDATE VendorProductCustomerCourier SET Courier = ?, IsPicked_by_Courier = "Y", Picked_by_CourierTimeStamp = NOW() WHERE PurchaseId = ?',
+      'UPDATE VendorProductCustomerCourier SET Courier = ? WHERE PurchaseId = ?',
       [courierId, req.params.id]
     );
     

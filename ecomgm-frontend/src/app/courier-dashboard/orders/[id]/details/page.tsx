@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
 
@@ -42,8 +42,8 @@ interface OrderDetails {
   ReturnTimeStamp: string;
 }
 
-export default function CourierOrderDetails({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function CourierOrderDetails({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [addressHierarchy, setAddressHierarchy] = useState({
@@ -127,19 +127,43 @@ export default function CourierOrderDetails({ params }: { params: { id: string }
         return;
       }
       
-      const response = await fetch(`http://localhost:4000/courier/order/${id}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${validToken.token}`,
-        },
-        body: JSON.stringify({ status }),
-      });
+      let response;
+      
+      // Use pickup endpoint for Picked Up status
+      if (status === 'Picked Up') {
+        response = await fetch(`http://localhost:4000/courier/order/${id}/pickup`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${validToken.token}`,
+          },
+        });
+      } else {
+        // Use regular status endpoint for other statuses
+        // Map frontend status names to backend expected values
+        const backendStatus = status === 'Dispatched' ? 'Shipped' : status;
+        response = await fetch(`http://localhost:4000/courier/order/${id}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${validToken.token}`,
+          },
+          body: JSON.stringify({ status: backendStatus }),
+        });
+      }
       
       if (response.ok) {
         const data = await response.json();
-        setOrder(data.order);
-        alert(`Order status updated to ${status}`);
+        
+        // Refresh order data to get updated status
+        await fetchOrderDetails();
+        
+        // Show appropriate success message
+        if (status === 'Picked Up' && data.trackingNumber) {
+          alert(`Order picked up successfully! Tracking number: ${data.trackingNumber}`);
+        } else {
+          alert(`Order status updated to ${status}`);
+        }
       } else {
         const errorData = await response.json();
         alert(errorData.error || `Failed to update order status to ${status}`);

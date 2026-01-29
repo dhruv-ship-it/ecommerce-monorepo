@@ -120,36 +120,104 @@ router.post('/place', authMiddleware, async (req, res) => {
       // Use default courier from VendorProduct directly (no acceptance flow)
       const courierId = vendor.DefaultCourier || 0;
       
-      // Create order entry in vendorproductcustomercourier table immediately
-      // IsPicked_by_Courier set to 'Y' if courier assigned, 'N' if no courier
-      const isPickedStatus = courierId ? 'Y' : 'N';
-      
-      if (courierId && courierId !== 0) {
-        // Courier assigned - set as picked immediately and generate tracking number
-        const trackingNumber = `TRK${Date.now()}${purchaseId}`;
-        await conn.query(
-          `INSERT INTO vendorproductcustomercourier 
-           (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
-            OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
-            IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, IsOut_for_Delivery, IsDelivered, 
-            IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', ?, 'Y', NOW(), 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
-          [purchaseId, customerId, item.ProductId, vendor.Vendor, courierId, mrp, discountValuePerUnit, gst, item.Quantity, trackingNumber, customerId]
-        );
-      } else {
-        // No courier assigned - vendor must assign later
-        await conn.query(
-          `INSERT INTO vendorproductcustomercourier 
-           (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
-            OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
-            IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, IsOut_for_Delivery, IsDelivered, 
-            IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', '0000-00-00 00:00:00', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
-          [purchaseId, customerId, item.ProductId, vendor.Vendor, 0, mrp, discountValuePerUnit, gst, item.Quantity, customerId]
-        );
-      }
+      // Create order entry in vendorproductcustomercourier table
+      // Courier will be assigned 'N' initially, tracking number generated when picked up
+      await conn.query(
+        `INSERT INTO vendorproductcustomercourier 
+         (PurchaseId, Customer, Product, Vendor, Courier, MRP_SS, Discount_SS, GST_SS, PurchaseQty, 
+          OrderCreationTimeStamp, IsReady_for_Pickup_by_Courier, TrackingNo, 
+          IsPicked_by_Courier, Picked_by_CourierTimeStamp, IsDispatched, IsOut_for_Delivery, IsDelivered, 
+          IsPartialDelivery, IsReturned, IsDeleted, RecordCreationLogin) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'N', '', 'N', '0000-00-00 00:00:00', 'N', 'N', 'N', 'N', 'N', 'N', ?)`,
+        [purchaseId, customerId, item.ProductId, vendor.Vendor, courierId, mrp, discountValuePerUnit, gst, item.Quantity, customerId]
+      );
       
       console.log(`NOTIFICATION: New order ${purchaseId} created with courier ${courierId || 'none (vendor must assign)'}`);
+      
+      // Create notifications for order placement
+      try {
+        console.log(`NOTIFICATION DEBUG: Creating notifications for order ${purchaseId}`);
+        console.log(`NOTIFICATION DEBUG: Customer ID: ${customerId}, Vendor ID: ${vendor.Vendor}, Courier ID: ${courierId}`);
+        
+        // Get vendor and courier user IDs
+        const vendorInfoResult = await conn.query(
+          'SELECT UserId FROM user WHERE UserId = ? AND IsVendor = "Y"',
+          [vendor.Vendor]
+        );
+        
+        // Handle MariaDB result format
+        let vendorInfo = [];
+        if (Array.isArray(vendorInfoResult)) {
+          if (Array.isArray(vendorInfoResult[0])) {
+            vendorInfo = vendorInfoResult[0];
+          } else {
+            vendorInfo = vendorInfoResult;
+          }
+        }
+        
+        console.log(`NOTIFICATION DEBUG: Vendor info query result:`, vendorInfo);
+        
+        let courierUserId = null;
+        if (courierId && courierId !== 0) {
+          const courierInfoResult = await conn.query(
+            'SELECT UserId FROM user WHERE UserId = ? AND IsCourier = "Y"',
+            [courierId]
+          );
+          
+          // Handle MariaDB result format
+          let courierInfo = [];
+          if (Array.isArray(courierInfoResult)) {
+            if (Array.isArray(courierInfoResult[0])) {
+              courierInfo = courierInfoResult[0];
+            } else {
+              courierInfo = courierInfoResult;
+            }
+          }
+          
+          courierUserId = courierInfo && courierInfo.length > 0 ? courierInfo[0].UserId : null;
+          console.log(`NOTIFICATION DEBUG: Courier info query result:`, courierInfo);
+        }
+        
+        // Create customer notification
+        await conn.query(
+          `INSERT INTO notification_customer 
+           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [customerId, 'Order', `Order #${purchaseId} placed successfully. We will keep you updated on its status.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Customer notification created`);
+        
+        // Create vendor notification
+        if (vendorInfo && vendorInfo.length > 0) {
+          await conn.query(
+            `INSERT INTO notification_user 
+             (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+             VALUES (?, ?, ?, 'N', NOW())`,
+            [vendorInfo[0].UserId, 'Order', `New order #${purchaseId} placed. Please prepare the items and mark it ready for pickup.`]
+          );
+          console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${vendorInfo[0].UserId}`);
+        } else {
+          console.log(`NOTIFICATION DEBUG: No vendor notification created. Vendor info:`, vendorInfo);
+        }
+        
+        // Create courier notification if courier is assigned
+        if (courierUserId) {
+          await conn.query(
+            `INSERT INTO notification_user 
+             (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+             VALUES (?, ?, ?, 'N', NOW())`,
+            [courierUserId, 'Order', `New order #${purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`]
+          );
+          console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${courierUserId}`);
+        } else {
+          console.log(`NOTIFICATION DEBUG: No courier notification created. Courier user ID: ${courierUserId}`);
+        }
+        
+        console.log(`NOTIFICATION: Created notifications for order ${purchaseId}`);
+      } catch (notificationError) {
+        console.error('Error creating notifications:', notificationError);
+        // Don't fail the order creation if notification fails
+      }
       
       // Decrement stock quantity for the vendor product
       const currentStock = parseFloat(vendor.StockQty) || 0;

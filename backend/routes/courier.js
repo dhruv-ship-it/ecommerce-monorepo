@@ -297,6 +297,72 @@ router.get('/orders', authMiddleware, courierOnlyMiddleware, async (req, res) =>
   }
 });
 
+// Courier picks up order - Generate tracking number and mark as picked up
+router.put('/order/:id/pickup', authMiddleware, courierOnlyMiddleware, async (req, res) => {
+  let conn;
+  try {
+    conn = await db.getConnection();
+    
+    // Check if order is assigned to this courier and ready for pickup
+    const orderCheckResult = await conn.query(
+      'SELECT * FROM VendorProductCustomerCourier WHERE PurchaseId = ? AND Courier = ?',
+      [req.params.id, req.user.id]
+    );
+    
+    // Handle query result
+    let orderCheck = [];
+    if (Array.isArray(orderCheckResult)) {
+      if (Array.isArray(orderCheckResult[0])) {
+        orderCheck = orderCheckResult[0];
+      } else {
+        orderCheck = orderCheckResult;
+      }
+    } else if (orderCheckResult) {
+      orderCheck = [orderCheckResult];
+    }
+    
+    if (!orderCheck || orderCheck.length === 0) {
+      return res.status(403).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    const order = orderCheck[0];
+    
+    // Check if order is ready for pickup
+    if (order.IsReady_for_Pickup_by_Courier !== 'Y') {
+      return res.status(400).json({ error: 'Order is not ready for pickup yet' });
+    }
+    
+    // Check if already picked up
+    if (order.IsPicked_by_Courier === 'Y') {
+      return res.status(400).json({ error: 'Order already picked up' });
+    }
+    
+    // Generate tracking number
+    const trackingNumber = `TRK${Date.now()}${req.params.id}`;
+    
+    // Update VendorProductCustomerCourier table
+    await conn.query(
+      'UPDATE VendorProductCustomerCourier SET IsPicked_by_Courier = "Y", Picked_by_CourierTimeStamp = NOW(), TrackingNo = ? WHERE PurchaseId = ?',
+      [trackingNumber, req.params.id]
+    );
+    
+    // Update Purchase table status to Shipped when picked up
+    await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', ['Shipped', req.params.id]);
+    
+    conn.release();
+    res.json({ 
+      message: 'Order picked up successfully', 
+      trackingNumber,
+      pickupTime: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Courier pickup error:', err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 // Update order status - Couriers can update delivery status after order is ready for pickup
 router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (req, res) => {
   const { status } = req.body;
@@ -341,8 +407,16 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
       trackingNumber = `TRK${Date.now()}${req.params.id}`;
     }
     
-    // Update Purchase table status
-    await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', [status, req.params.id]);
+    // Update Purchase table status - map to valid ENUM values
+    let purchaseStatus = status;
+    if (status === 'Out for Delivery') {
+      purchaseStatus = 'Shipped'; // Closest valid ENUM value
+    } else if (status === 'Dispatched') {
+      purchaseStatus = 'Shipped'; // Map frontend 'Dispatched' to backend 'Shipped'
+    }
+    // 'Delivered' and 'Cancelled' are already valid ENUM values
+    
+    await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', [purchaseStatus, req.params.id]);
     
     // Update VendorProductCustomerCourier table based on status
     const updateFields = [];
@@ -353,32 +427,59 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
       updateValues.push(trackingNumber);
     }
     
+    console.log(`DEBUG: Updating order ${req.params.id} with status: ${status}`);
+    console.log(`DEBUG: Order ready for pickup: ${order.IsReady_for_Pickup_by_Courier}`);
+    console.log(`DEBUG: Order picked up: ${order.IsPicked_by_Courier}`);
+    
     // Couriers can update delivery status fields
     if (status === 'Shipped' || status === 'Dispatched') {
       updateFields.push('IsDispatched = "Y", DispatchedTimeStamp = NOW()');
+      console.log('DEBUG: Setting IsDispatched = Y');
     } else if (status === 'Out for Delivery') {
       updateFields.push('IsOut_for_Delivery = "Y", Out_for_DeliveryTimeStamp = NOW()');
+      console.log('DEBUG: Setting IsOut_for_Delivery = Y');
     } else if (status === 'Delivered') {
       updateFields.push('IsDelivered = "Y", DeliveryTimeStamp = NOW()');
+      console.log('DEBUG: Setting IsDelivered = Y');
     } else if (status === 'Returned') {
       updateFields.push('IsReturned = "Y", ReturnTimeStamp = NOW()');
+      console.log('DEBUG: Setting IsReturned = Y');
+    } else {
+      console.log('DEBUG: No matching status condition found');
     }
     
     if (updateFields.length > 0) {
-      await conn.query(
-        `UPDATE VendorProductCustomerCourier SET ${updateFields.join(', ')} WHERE PurchaseId = ?`,
-        [...updateValues, req.params.id]
-      );
+      console.log(`DEBUG: Executing query: UPDATE VendorProductCustomerCourier SET ${updateFields.join(', ')} WHERE PurchaseId = ?`);
+      console.log(`DEBUG: Query parameters:`, [...updateValues, req.params.id]);
+      
+      try {
+        await conn.query(
+          `UPDATE VendorProductCustomerCourier SET ${updateFields.join(', ')} WHERE PurchaseId = ?`,
+          [...updateValues, req.params.id]
+        );
+        console.log('DEBUG: VendorProductCustomerCourier update successful');
+      } catch (dbError) {
+        console.error('DEBUG: Database error:', dbError);
+        throw dbError;
+      }
+    } else {
+      console.log('DEBUG: No fields to update');
     }
     
     // Get updated order details with product info
     const orderResult = await conn.query(
-      'SELECT vpc.*, ' +
+      'SELECT vpc.PurchaseId as PuchaseId, ' +
+      'vpc.Vendor, vpc.Product as ProductId, vpc.Customer as CustomerId, ' +
+      'vpc.Courier, vpc.TrackingNo, ' +
+      'vpc.IsReady_for_Pickup_by_Courier, vpc.Ready_for_Pickup_by_CourierTimeStamp, ' +
+      'vpc.IsPicked_by_Courier, vpc.Picked_by_CourierTimeStamp, ' +
+      'vpc.IsDispatched, vpc.DispatchedTimeStamp, ' +
+      'vpc.IsOut_for_Delivery, vpc.Out_for_DeliveryTimeStamp, ' +
+      'vpc.IsDelivered, vpc.DeliveryTimeStamp, ' +
+      'vpc.IsReturned, vpc.ReturnTimeStamp, ' +
+      'vpc.MRP_SS, vpc.Discount_SS, vpc.GST_SS, vpc.PurchaseQty, ' +
       'vpc.OrderCreationTimeStamp as OrderDate, ' +
       'vpc.Courier as CourierId, ' +
-      'COALESCE(p.TotalAmount, vpc.MRP_SS) as TotalAmount, ' +
-      'COALESCE(p.PaymentMode, \'COD\') as PaymentMode, ' +
-      'COALESCE(p.PaymentStatus, \'Pending\') as PaymentStatus, ' +
       'pr.Product, pr.MRP as ProductPrice, ' +
       'c.Customer, c.CustomerEmail, c.CustomerMobile, ' +
       'u.User as VendorName, u.UserMobile as VendorMobile, u.UserEmail as VendorEmail ' +
@@ -386,7 +487,6 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
       'JOIN Product pr ON vpc.Product = pr.ProductId ' +
       'JOIN Customer c ON vpc.Customer = c.CustomerId ' +
       'JOIN User u ON vpc.Vendor = u.UserId ' +
-      'LEFT JOIN Purchase p ON vpc.PurchaseId = p.PuchaseId ' +
       'WHERE vpc.PurchaseId = ? AND vpc.Courier = ?',
       [req.params.id, req.user.id]
     );
@@ -407,9 +507,11 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
     }
     
     // Convert BigInt values to strings to prevent serialization errors
-    const processedUpdatedOrder = {};
-    for (const [key, value] of Object.entries(updatedOrder[0])) {
-      processedUpdatedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+    let processedUpdatedOrder = {};
+    if (updatedOrder && updatedOrder.length > 0) {
+      for (const [key, value] of Object.entries(updatedOrder[0])) {
+        processedUpdatedOrder[key] = typeof value === 'bigint' ? Number(value) : value;
+      }
     }
     
     res.json({ 
@@ -417,7 +519,8 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
       order: processedUpdatedOrder
     });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Courier status update error:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
   } finally {
     if (conn) conn.release();
   }
