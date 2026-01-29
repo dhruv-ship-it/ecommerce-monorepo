@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { validateAuth, performAutoLogout, getValidToken } from "@/utils/auth";
+import { Bell } from "lucide-react";
 
 interface User {
   UserId: number;
@@ -117,6 +118,13 @@ export default function VendorDashboard() {
               <span className="text-sm text-gray-700">
                 Welcome, {user?.User || "Vendor"}
               </span>
+              <button
+                onClick={() => router.push('/vendor-dashboard/notifications')}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Bell className="h-4 w-4" />
+                Notifications
+              </button>
               <button
                 onClick={() => router.push('/vendor-dashboard/profile')}
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"

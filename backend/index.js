@@ -18,6 +18,7 @@ import vendorRouter from './routes/vendor.js';
 import courierRouter from './routes/courier.js';
 import productRouter from './routes/product.js';
 import modelRouter from './routes/model.js';
+import notificationRouter from './routes/notification.js';
 import customerRouter from './routes/customer.js';
 import archiveRouter from './routes/archive.js';
 import adminTablesRouter from './routes/admin-tables.js';
@@ -283,6 +284,9 @@ app.use('/vendor', userTokenMiddleware, vendorRoleMiddleware, vendorRouter);
 app.use('/courier', userTokenMiddleware, courierRoleMiddleware, courierRouter);
 app.use('/products', productRouter);
 app.use('/models', modelRouter);
+// Use notification routes with appropriate middleware
+app.use('/notifications/user', userTokenMiddleware, notificationRouter);
+app.use('/notifications/customer', customerTokenMiddleware, notificationRouter);
 app.use('/admin-tables', userTokenMiddleware, adminRoleMiddleware, adminTablesRouter);
 app.use('/archive', suTokenMiddleware, archiveRouter);
 app.use('/product-images', userTokenMiddleware, adminRoleMiddleware, productImagesRouter); // Add this line

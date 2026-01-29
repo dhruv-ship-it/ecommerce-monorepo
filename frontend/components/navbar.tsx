@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Search, ShoppingCart, User, Menu, Heart, Package, ShoppingBag } from "lucide-react"
+import { Search, ShoppingCart, User, Menu, Heart, Package, ShoppingBag, Bell } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
@@ -161,6 +161,17 @@ export function Navbar() {
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-2">
+            {/* Notifications */}
+            {isLoggedIn && customer && (
+              <div>
+                <Button variant="ghost" size="icon" asChild>
+                  <Link href="/notifications">
+                    <Bell className="h-5 w-5" />
+                  </Link>
+                </Button>
+              </div>
+            )}
+            
             {/* User Account */}
             {isLoggedIn && customer ? (
               <DropdownMenu>
