@@ -349,6 +349,77 @@ router.put('/order/:id/pickup', authMiddleware, courierOnlyMiddleware, async (re
     // Update Purchase table status to Shipped when picked up
     await conn.query('UPDATE Purchase SET OrderStatus = ? WHERE PuchaseId = ?', ['Shipped', req.params.id]);
     
+    // Create notifications for Picked Up status
+    try {
+      console.log(`NOTIFICATION: Order ${req.params.id} picked up by courier ${req.user.id}`);
+      
+      // Get order details for notification messages
+      const orderDetailsResult = await conn.query(
+        `SELECT 
+          vpc.PurchaseId,
+          vpc.Customer,
+          vpc.Courier,
+          vpc.Vendor,
+          p.Product,
+          c.Customer as CustomerName
+         FROM VendorProductCustomerCourier vpc
+         JOIN Product p ON vpc.Product = p.ProductId
+         JOIN Customer c ON vpc.Customer = c.CustomerId
+         WHERE vpc.PurchaseId = ?`,
+        [req.params.id]
+      );
+      
+      // Handle MariaDB result format
+      let orderDetails = [];
+      if (Array.isArray(orderDetailsResult)) {
+        if (Array.isArray(orderDetailsResult[0])) {
+          orderDetails = orderDetailsResult[0];
+        } else {
+          orderDetails = orderDetailsResult;
+        }
+      }
+      
+      if (orderDetails && orderDetails.length > 0) {
+        const order = orderDetails[0];
+        console.log(`NOTIFICATION DEBUG: Creating pickup notifications for order ${req.params.id}`);
+        console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
+        
+        // Create customer notification
+        await conn.query(
+          `INSERT INTO notification_customer 
+           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been picked up by the courier. Tracking number: ${trackingNumber}. It will be dispatched soon.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+        
+        // Create vendor notification
+        await conn.query(
+          `INSERT INTO notification_user 
+           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been picked up by courier. The order is now in transit.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+        
+        // Create courier notification (confirmation)
+        await conn.query(
+          `INSERT INTO notification_user 
+           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully picked up. Please proceed with dispatch.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+        
+        console.log(`NOTIFICATION: Created pickup notifications for order ${req.params.id}`);
+      } else {
+        console.log(`NOTIFICATION DEBUG: Could not find order details for notification. Order ID: ${req.params.id}`);
+      }
+    } catch (notificationError) {
+      console.error('Error creating pickup notifications:', notificationError);
+      // Don't fail the pickup operation if notification fails
+    }
+    
     conn.release();
     res.json({ 
       message: 'Order picked up successfully', 
@@ -458,6 +529,225 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
           [...updateValues, req.params.id]
         );
         console.log('DEBUG: VendorProductCustomerCourier update successful');
+        
+        // Create notifications for Dispatched status
+        if (status === 'Shipped' || status === 'Dispatched') {
+          try {
+            console.log(`NOTIFICATION: Order ${req.params.id} marked as dispatched by courier ${req.user.id}`);
+            
+            // Get order details for notification messages
+            const orderDetailsResult = await conn.query(
+              `SELECT 
+                vpc.PurchaseId,
+                vpc.Customer,
+                vpc.Courier,
+                vpc.Vendor,
+                p.Product,
+                c.Customer as CustomerName
+               FROM VendorProductCustomerCourier vpc
+               JOIN Product p ON vpc.Product = p.ProductId
+               JOIN Customer c ON vpc.Customer = c.CustomerId
+               WHERE vpc.PurchaseId = ?`,
+              [req.params.id]
+            );
+            
+            // Handle MariaDB result format
+            let orderDetails = [];
+            if (Array.isArray(orderDetailsResult)) {
+              if (Array.isArray(orderDetailsResult[0])) {
+                orderDetails = orderDetailsResult[0];
+              } else {
+                orderDetails = orderDetailsResult;
+              }
+            }
+            
+            if (orderDetails && orderDetails.length > 0) {
+              const order = orderDetails[0];
+              console.log(`NOTIFICATION DEBUG: Creating dispatched notifications for order ${req.params.id}`);
+              console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
+              
+              // Create customer notification
+              await conn.query(
+                `INSERT INTO notification_customer 
+                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been dispatched and is on its way for delivery. Tracking number: ${trackingNumber || 'Not available yet'}.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              
+              // Create vendor notification
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been dispatched by courier. The customer will be notified.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              
+              // Create courier notification (confirmation)
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as dispatched. Continue with delivery process.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+              
+              console.log(`NOTIFICATION: Created dispatched notifications for order ${req.params.id}`);
+            } else {
+              console.log(`NOTIFICATION DEBUG: Could not find order details for notification. Order ID: ${req.params.id}`);
+            }
+          } catch (notificationError) {
+            console.error('Error creating dispatched notifications:', notificationError);
+            // Don't fail the dispatch operation if notification fails
+          }
+        }
+        
+        // Create notifications for Out for Delivery status
+        if (status === 'Out for Delivery') {
+          try {
+            console.log(`NOTIFICATION: Order ${req.params.id} marked as out for delivery by courier ${req.user.id}`);
+            
+            // Get order details for notification messages
+            const orderDetailsResult = await conn.query(
+              `SELECT 
+                vpc.PurchaseId,
+                vpc.Customer,
+                vpc.Courier,
+                vpc.Vendor,
+                p.Product,
+                c.Customer as CustomerName
+               FROM VendorProductCustomerCourier vpc
+               JOIN Product p ON vpc.Product = p.ProductId
+               JOIN Customer c ON vpc.Customer = c.CustomerId
+               WHERE vpc.PurchaseId = ?`,
+              [req.params.id]
+            );
+            
+            // Handle MariaDB result format
+            let orderDetails = [];
+            if (Array.isArray(orderDetailsResult)) {
+              if (Array.isArray(orderDetailsResult[0])) {
+                orderDetails = orderDetailsResult[0];
+              } else {
+                orderDetails = orderDetailsResult;
+              }
+            }
+            
+            if (orderDetails && orderDetails.length > 0) {
+              const order = orderDetails[0];
+              console.log(`NOTIFICATION DEBUG: Creating out for delivery notifications for order ${req.params.id}`);
+              console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
+              
+              // Create customer notification
+              await conn.query(
+                `INSERT INTO notification_customer 
+                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} is now out for delivery. The courier is on the way to deliver it to you. Tracking number: ${trackingNumber || 'Not available yet'}.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              
+              // Create vendor notification
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} is now out for delivery. The customer will be updated shortly.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              
+              // Create courier notification (confirmation)
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as out for delivery. Proceed with final delivery to customer.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+              
+              console.log(`NOTIFICATION: Created out for delivery notifications for order ${req.params.id}`);
+            } else {
+              console.log(`NOTIFICATION DEBUG: Could not find order details for notification. Order ID: ${req.params.id}`);
+            }
+          } catch (notificationError) {
+            console.error('Error creating out for delivery notifications:', notificationError);
+            // Don't fail the out for delivery operation if notification fails
+          }
+        }
+        
+        // Create notifications for Delivered status
+        if (status === 'Delivered') {
+          try {
+            console.log(`NOTIFICATION: Order ${req.params.id} marked as delivered by courier ${req.user.id}`);
+            
+            // Get order details for notification messages
+            const orderDetailsResult = await conn.query(
+              `SELECT 
+                vpc.PurchaseId,
+                vpc.Customer,
+                vpc.Courier,
+                vpc.Vendor,
+                p.Product,
+                c.Customer as CustomerName
+               FROM VendorProductCustomerCourier vpc
+               JOIN Product p ON vpc.Product = p.ProductId
+               JOIN Customer c ON vpc.Customer = c.CustomerId
+               WHERE vpc.PurchaseId = ?`,
+              [req.params.id]
+            );
+            
+            // Handle MariaDB result format
+            let orderDetails = [];
+            if (Array.isArray(orderDetailsResult)) {
+              if (Array.isArray(orderDetailsResult[0])) {
+                orderDetails = orderDetailsResult[0];
+              } else {
+                orderDetails = orderDetailsResult;
+              }
+            }
+            
+            if (orderDetails && orderDetails.length > 0) {
+              const order = orderDetails[0];
+              console.log(`NOTIFICATION DEBUG: Creating delivered notifications for order ${req.params.id}`);
+              console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
+              
+              // Create customer notification
+              await conn.query(
+                `INSERT INTO notification_customer 
+                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been successfully delivered. Thank you for shopping with us!`]
+              );
+              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              
+              // Create vendor notification
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully delivered. Payment should be processed accordingly.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              
+              // Create courier notification (confirmation)
+              await conn.query(
+                `INSERT INTO notification_user 
+                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+                 VALUES (?, ?, ?, 'N', NOW())`,
+                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully delivered. Delivery process completed.`]
+              );
+              console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+              
+              console.log(`NOTIFICATION: Created delivered notifications for order ${req.params.id}`);
+            } else {
+              console.log(`NOTIFICATION DEBUG: Could not find order details for notification. Order ID: ${req.params.id}`);
+            }
+          } catch (notificationError) {
+            console.error('Error creating delivered notifications:', notificationError);
+            // Don't fail the delivered operation if notification fails
+          }
+        }
       } catch (dbError) {
         console.error('DEBUG: Database error:', dbError);
         throw dbError;

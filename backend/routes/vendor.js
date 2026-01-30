@@ -694,6 +694,101 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
       [trackingNumber, req.params.id]
     );
     
+    // Create notifications for Ready for Pickup status
+    try {
+      console.log(`NOTIFICATION: Order ${req.params.id} marked as ready for pickup by vendor ${req.user.id}`);
+      
+      // Get order details for notification messages
+      const orderDetailsResult = await conn.query(
+        `SELECT 
+          vpc.PurchaseId,
+          vpc.Customer,
+          vpc.Courier,
+          vpc.Vendor,
+          p.Product,
+          c.Customer as CustomerName
+         FROM VendorProductCustomerCourier vpc
+         JOIN Product p ON vpc.Product = p.ProductId
+         JOIN Customer c ON vpc.Customer = c.CustomerId
+         WHERE vpc.PurchaseId = ?`,
+        [req.params.id]
+      );
+      
+      // Handle MariaDB result format
+      let orderDetails = [];
+      if (Array.isArray(orderDetailsResult)) {
+        if (Array.isArray(orderDetailsResult[0])) {
+          orderDetails = orderDetailsResult[0];
+        } else {
+          orderDetails = orderDetailsResult;
+        }
+      }
+      
+      if (orderDetails && orderDetails.length > 0) {
+        const order = orderDetails[0];
+        console.log(`NOTIFICATION DEBUG: Creating ready for pickup notifications for order ${req.params.id}`);
+        console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
+        
+        // Create customer notification
+        await conn.query(
+          `INSERT INTO notification_customer 
+           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} is now ready for pickup by the courier. We'll keep you updated on its delivery status.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+        
+        // Create vendor notification (confirmation)
+        await conn.query(
+          `INSERT INTO notification_user 
+           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+           VALUES (?, ?, ?, 'N', NOW())`,
+          [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as ready for pickup. The courier will be notified.`]
+        );
+        console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+        
+        // Create courier notification if courier is assigned
+        if (order.Courier && order.Courier !== 0) {
+          // Verify courier exists and is active
+          const courierCheckResult = await conn.query(
+            'SELECT UserId FROM User WHERE UserId = ? AND IsCourier = "Y" AND IsBlackListed != "Y"',
+            [order.Courier]
+          );
+          
+          // Handle MariaDB result format
+          let courierCheck = [];
+          if (Array.isArray(courierCheckResult)) {
+            if (Array.isArray(courierCheckResult[0])) {
+              courierCheck = courierCheckResult[0];
+            } else {
+              courierCheck = courierCheckResult;
+            }
+          }
+          
+          if (courierCheck && courierCheck.length > 0) {
+            await conn.query(
+              `INSERT INTO notification_user 
+               (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
+               VALUES (?, ?, ?, 'N', NOW())`,
+              [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} is now ready for pickup. Please collect it from the vendor.`]
+            );
+            console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+          } else {
+            console.log(`NOTIFICATION DEBUG: No courier notification created. Courier not found or inactive. Courier ID: ${order.Courier}`);
+          }
+        } else {
+          console.log(`NOTIFICATION DEBUG: No courier notification created. No courier assigned. Courier ID: ${order.Courier}`);
+        }
+        
+        console.log(`NOTIFICATION: Created ready for pickup notifications for order ${req.params.id}`);
+      } else {
+        console.log(`NOTIFICATION DEBUG: Could not find order details for notification. Order ID: ${req.params.id}`);
+      }
+    } catch (notificationError) {
+      console.error('Error creating ready for pickup notifications:', notificationError);
+      // Don't fail the ready for pickup operation if notification fails
+    }
+    
     conn.release();
     res.json({ message: 'Order marked as ready for pickup', trackingNumber });
   } catch (err) {
