@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, Clock, CheckCircle } from 'lucide-react';
 import { getValidToken } from '@/utils/auth';
 
@@ -16,6 +17,7 @@ interface Notification {
 export default function CourierNotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     fetchNotifications();
@@ -72,8 +74,28 @@ export default function CourierNotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-semibold text-gray-900">
+                SmartKartMGM - Courier Dashboard
+              </h1>
+            </div>
+            <div className="flex items-center">
+              <button
+                onClick={() => router.push('/courier-dashboard')}
+                className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+      
+      <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-8">
           <Bell className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
