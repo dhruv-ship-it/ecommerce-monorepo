@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../index.js';
+import { notificationService } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -727,25 +728,26 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
         console.log(`NOTIFICATION DEBUG: Creating ready for pickup notifications for order ${req.params.id}`);
         console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
         
-        // Create customer notification
-        await conn.query(
-          `INSERT INTO notification_customer 
-           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} is now ready for pickup by the courier. We'll keep you updated on its delivery status.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+        // Create notifications using notification service
+        const notifications = [];
         
-        // Create vendor notification (confirmation)
-        await conn.query(
-          `INSERT INTO notification_user 
-           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as ready for pickup. The courier will be notified.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+        // Customer notification
+        notifications.push({
+          recipientId: order.Customer,
+          recipientType: 'customer',
+          type: 'Order Update',
+          message: `Your order #${req.params.id} for ${order.Product} is now ready for pickup by the courier. We'll keep you updated on its delivery status.`
+        });
         
-        // Create courier notification if courier is assigned
+        // Vendor notification (confirmation)
+        notifications.push({
+          recipientId: order.Vendor,
+          recipientType: 'user',
+          type: 'Order Update',
+          message: `Order #${req.params.id} for ${order.Product} has been marked as ready for pickup. The courier will be notified.`
+        });
+        
+        // Courier notification if courier is assigned
         if (order.Courier && order.Courier !== 0) {
           // Verify courier exists and is active
           const courierCheckResult = await conn.query(
@@ -764,19 +766,22 @@ router.put('/order/:id/ready', authMiddleware, vendorOnlyMiddleware, async (req,
           }
           
           if (courierCheck && courierCheck.length > 0) {
-            await conn.query(
-              `INSERT INTO notification_user 
-               (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-               VALUES (?, ?, ?, 'N', NOW())`,
-              [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} is now ready for pickup. Please collect it from the vendor.`]
-            );
-            console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+            notifications.push({
+              recipientId: order.Courier,
+              recipientType: 'user',
+              type: 'Order Update',
+              message: `Order #${req.params.id} for ${order.Product} is now ready for pickup. Please collect it from the vendor.`
+            });
           } else {
             console.log(`NOTIFICATION DEBUG: No courier notification created. Courier not found or inactive. Courier ID: ${order.Courier}`);
           }
         } else {
           console.log(`NOTIFICATION DEBUG: No courier notification created. No courier assigned. Courier ID: ${order.Courier}`);
         }
+        
+        // Create all notifications using service
+        const results = await notificationService.createNotifications(notifications);
+        console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
         
         console.log(`NOTIFICATION: Created ready for pickup notifications for order ${req.params.id}`);
       } else {

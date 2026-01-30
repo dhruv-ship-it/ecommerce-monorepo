@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../index.js';
+import { notificationService } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -384,32 +385,36 @@ router.put('/order/:id/pickup', authMiddleware, courierOnlyMiddleware, async (re
         console.log(`NOTIFICATION DEBUG: Creating pickup notifications for order ${req.params.id}`);
         console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
         
-        // Create customer notification
-        await conn.query(
-          `INSERT INTO notification_customer 
-           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been picked up by the courier. Tracking number: ${trackingNumber}. It will be dispatched soon.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+        // Create notifications using notification service
+        const notifications = [];
         
-        // Create vendor notification
-        await conn.query(
-          `INSERT INTO notification_user 
-           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been picked up by courier. The order is now in transit.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+        // Customer notification
+        notifications.push({
+          recipientId: order.Customer,
+          recipientType: 'customer',
+          type: 'Order Update',
+          message: `Your order #${req.params.id} for ${order.Product} has been picked up by the courier. Tracking number: ${trackingNumber}. It will be dispatched soon.`
+        });
         
-        // Create courier notification (confirmation)
-        await conn.query(
-          `INSERT INTO notification_user 
-           (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully picked up. Please proceed with dispatch.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+        // Vendor notification
+        notifications.push({
+          recipientId: order.Vendor,
+          recipientType: 'user',
+          type: 'Order Update',
+          message: `Order #${req.params.id} for ${order.Product} has been picked up by courier. The order is now in transit.`
+        });
+        
+        // Courier notification (confirmation)
+        notifications.push({
+          recipientId: order.Courier,
+          recipientType: 'user',
+          type: 'Order Update',
+          message: `Order #${req.params.id} for ${order.Product} has been successfully picked up. Please proceed with dispatch.`
+        });
+        
+        // Create all notifications using service
+        const results = await notificationService.createNotifications(notifications);
+        console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
         
         console.log(`NOTIFICATION: Created pickup notifications for order ${req.params.id}`);
       } else {
@@ -566,32 +571,36 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
               console.log(`NOTIFICATION DEBUG: Creating dispatched notifications for order ${req.params.id}`);
               console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
               
-              // Create customer notification
-              await conn.query(
-                `INSERT INTO notification_customer 
-                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been dispatched and is on its way for delivery. Tracking number: ${trackingNumber || 'Not available yet'}.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              // Create notifications using notification service
+              const notifications = [];
               
-              // Create vendor notification
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been dispatched by courier. The customer will be notified.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              // Customer notification
+              notifications.push({
+                recipientId: order.Customer,
+                recipientType: 'customer',
+                type: 'Order Update',
+                message: `Your order #${req.params.id} for ${order.Product} has been dispatched and is on its way for delivery. Tracking number: ${trackingNumber || 'Not available yet'}.`
+              });
               
-              // Create courier notification (confirmation)
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as dispatched. Continue with delivery process.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+              // Vendor notification
+              notifications.push({
+                recipientId: order.Vendor,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} has been dispatched by courier. The customer will be notified.`
+              });
+              
+              // Courier notification (confirmation)
+              notifications.push({
+                recipientId: order.Courier,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} has been marked as dispatched. Continue with delivery process.`
+              });
+              
+              // Create all notifications using service
+              const results = await notificationService.createNotifications(notifications);
+              console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
               
               console.log(`NOTIFICATION: Created dispatched notifications for order ${req.params.id}`);
             } else {
@@ -639,31 +648,36 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
               console.log(`NOTIFICATION DEBUG: Creating out for delivery notifications for order ${req.params.id}`);
               console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
               
-              // Create customer notification
-              await conn.query(
-                `INSERT INTO notification_customer 
-                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} is now out for delivery. The courier is on the way to deliver it to you. Tracking number: ${trackingNumber || 'Not available yet'}.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              // Create notifications using notification service
+              const notifications = [];
               
-              // Create vendor notification
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} is now out for delivery. The customer will be updated shortly.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              // Customer notification
+              notifications.push({
+                recipientId: order.Customer,
+                recipientType: 'customer',
+                type: 'Order Update',
+                message: `Your order #${req.params.id} for ${order.Product} is now out for delivery. The courier is on the way to deliver it to you. Tracking number: ${trackingNumber || 'Not available yet'}.`
+              });
               
-              // Create courier notification (confirmation)
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been marked as out for delivery. Proceed with final delivery to customer.`]
-              );
+              // Vendor notification
+              notifications.push({
+                recipientId: order.Vendor,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} is now out for delivery. The customer will be updated shortly.`
+              });
+              
+              // Courier notification (confirmation)
+              notifications.push({
+                recipientId: order.Courier,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} has been marked as out for delivery. Proceed with final delivery to customer.`
+              });
+              
+              // Create all notifications using service
+              const results = await notificationService.createNotifications(notifications);
+              console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
               console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
               
               console.log(`NOTIFICATION: Created out for delivery notifications for order ${req.params.id}`);
@@ -712,32 +726,36 @@ router.put('/order/:id/status', authMiddleware, courierOnlyMiddleware, async (re
               console.log(`NOTIFICATION DEBUG: Creating delivered notifications for order ${req.params.id}`);
               console.log(`NOTIFICATION DEBUG: Customer ID: ${order.Customer}, Vendor ID: ${order.Vendor}, Courier ID: ${order.Courier}`);
               
-              // Create customer notification
-              await conn.query(
-                `INSERT INTO notification_customer 
-                 (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Customer, 'Order Update', `Your order #${req.params.id} for ${order.Product} has been successfully delivered. Thank you for shopping with us!`]
-              );
-              console.log(`NOTIFICATION DEBUG: Customer notification created for CustomerId: ${order.Customer}`);
+              // Create notifications using notification service
+              const notifications = [];
               
-              // Create vendor notification
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Vendor, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully delivered. Payment should be processed accordingly.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${order.Vendor}`);
+              // Customer notification
+              notifications.push({
+                recipientId: order.Customer,
+                recipientType: 'customer',
+                type: 'Order Update',
+                message: `Your order #${req.params.id} for ${order.Product} has been successfully delivered. Thank you for shopping with us!`
+              });
               
-              // Create courier notification (confirmation)
-              await conn.query(
-                `INSERT INTO notification_user 
-                 (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-                 VALUES (?, ?, ?, 'N', NOW())`,
-                [order.Courier, 'Order Update', `Order #${req.params.id} for ${order.Product} has been successfully delivered. Delivery process completed.`]
-              );
-              console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${order.Courier}`);
+              // Vendor notification
+              notifications.push({
+                recipientId: order.Vendor,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} has been successfully delivered. Payment should be processed accordingly.`
+              });
+              
+              // Courier notification (confirmation)
+              notifications.push({
+                recipientId: order.Courier,
+                recipientType: 'user',
+                type: 'Order Update',
+                message: `Order #${req.params.id} for ${order.Product} has been successfully delivered. Delivery process completed.`
+              });
+              
+              // Create all notifications using service
+              const results = await notificationService.createNotifications(notifications);
+              console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
               
               console.log(`NOTIFICATION: Created delivered notifications for order ${req.params.id}`);
             } else {

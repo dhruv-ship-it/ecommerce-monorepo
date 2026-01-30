@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../index.js';
 import { recommendationService } from '../services/recommendationService.js';
+import { notificationService } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -135,7 +136,7 @@ router.post('/place', authMiddleware, async (req, res) => {
       
       console.log(`NOTIFICATION: New order ${purchaseId} created with courier ${courierId || 'none (vendor must assign)'}`);
       
-      // Create notifications for order placement
+      // Create notifications for order placement using notification service
       try {
         console.log(`NOTIFICATION DEBUG: Creating notifications for order ${purchaseId}`);
         console.log(`NOTIFICATION DEBUG: Customer ID: ${customerId}, Vendor ID: ${vendor.Vendor}, Courier ID: ${courierId}`);
@@ -179,41 +180,40 @@ router.post('/place', authMiddleware, async (req, res) => {
           console.log(`NOTIFICATION DEBUG: Courier info query result:`, courierInfo);
         }
         
-        // Create customer notification
-        await conn.query(
-          `INSERT INTO notification_customer 
-           (CustomerId, Type, Message, IsRead, RecordCreationTimeStamp) 
-           VALUES (?, ?, ?, 'N', NOW())`,
-          [customerId, 'Order', `Order #${purchaseId} placed successfully. We will keep you updated on its status.`]
-        );
-        console.log(`NOTIFICATION DEBUG: Customer notification created`);
+        // Prepare notifications array
+        const notifications = [];
         
-        // Create vendor notification
+        // Customer notification
+        notifications.push({
+          recipientId: customerId,
+          recipientType: 'customer',
+          type: 'Order',
+          message: `Order #${purchaseId} placed successfully. We will keep you updated on its status.`
+        });
+        
+        // Vendor notification
         if (vendorInfo && vendorInfo.length > 0) {
-          await conn.query(
-            `INSERT INTO notification_user 
-             (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-             VALUES (?, ?, ?, 'N', NOW())`,
-            [vendorInfo[0].UserId, 'Order', `New order #${purchaseId} placed. Please prepare the items and mark it ready for pickup.`]
-          );
-          console.log(`NOTIFICATION DEBUG: Vendor notification created for UserId: ${vendorInfo[0].UserId}`);
-        } else {
-          console.log(`NOTIFICATION DEBUG: No vendor notification created. Vendor info:`, vendorInfo);
+          notifications.push({
+            recipientId: vendorInfo[0].UserId,
+            recipientType: 'user',
+            type: 'Order',
+            message: `New order #${purchaseId} placed. Please prepare the items and mark it ready for pickup.`
+          });
         }
         
-        // Create courier notification if courier is assigned
+        // Courier notification
         if (courierUserId) {
-          await conn.query(
-            `INSERT INTO notification_user 
-             (UserId, Type, Message, IsRead, RecordCreationTimeStamp) 
-             VALUES (?, ?, ?, 'N', NOW())`,
-            [courierUserId, 'Order', `New order #${purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`]
-          );
-          console.log(`NOTIFICATION DEBUG: Courier notification created for UserId: ${courierUserId}`);
-        } else {
-          console.log(`NOTIFICATION DEBUG: No courier notification created. Courier user ID: ${courierUserId}`);
+          notifications.push({
+            recipientId: courierUserId,
+            recipientType: 'user',
+            type: 'Order',
+            message: `New order #${purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`
+          });
         }
         
+        // Create all notifications using service
+        const results = await notificationService.createNotifications(notifications);
+        console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
         console.log(`NOTIFICATION: Created notifications for order ${purchaseId}`);
       } catch (notificationError) {
         console.error('Error creating notifications:', notificationError);
@@ -365,51 +365,6 @@ router.get('/history', authMiddleware, async (req, res) => {
     res.json({ orders });
   } catch (err) {
     console.error('Order history error:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Get recommendations for customer
-router.get('/recommendations', authMiddleware, async (req, res) => {
-  try {
-    // For customers, req.user.id is already the CustomerId from JWT token
-    if (req.user.userType !== 'customer') {
-      return res.status(403).json({ error: 'Only customers can get recommendations' });
-    }
-    
-    const customerId = req.user.id;
-    
-    // Get the most recent order to base recommendations on
-    const conn = await db.getConnection();
-    const latestOrderResult = await conn.query(
-      `SELECT ProductId FROM purchase WHERE CustomerId = ? ORDER BY OrderDate DESC LIMIT 1`,
-      [customerId]
-    );
-    
-    let latestOrder = [];
-    if (Array.isArray(latestOrderResult)) {
-      if (Array.isArray(latestOrderResult[0])) {
-        latestOrder = latestOrderResult[0];
-      } else {
-        latestOrder = latestOrderResult;
-      }
-    }
-    
-    if (!latestOrder || latestOrder.length === 0) {
-      conn.release();
-      return res.json({ recommendations: [] });
-    }
-    
-    const productId = latestOrder[0].ProductId;
-    
-    // Generate recommendations
-    const recommendations = await recommendationService.getRecommendations(customerId, productId);
-    
-    conn.release();
-    
-    res.json({ recommendations });
-  } catch (err) {
-    console.error('Recommendations error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
