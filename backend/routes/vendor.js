@@ -471,11 +471,10 @@ router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => 
         COALESCE(u.UserMobile, default_u.UserMobile) as CourierMobile,  -- Use default courier mobile if not assigned in order
         CASE 
           WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
-          WHEN vpc.IsReturned = 'Y' THEN 'Returned'
           WHEN vpc.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
           WHEN vpc.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc.IsPicked_by_Courier = 'Y' THEN 'Picked Up'
           WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
-          WHEN COALESCE(vpc.Courier, vp.Courier) = 0 THEN 'No Courier Assigned'
           ELSE 'Order Placed'
         END as OrderStatus,
         CASE
@@ -517,11 +516,10 @@ router.get('/orders', authMiddleware, vendorOnlyMiddleware, async (req, res) => 
         u.UserMobile as CourierMobile,
         CASE 
           WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
-          WHEN vpc_arch.IsReturned = 'Y' THEN 'Returned'
           WHEN vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
           WHEN vpc_arch.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc_arch.IsPicked_by_Courier = 'Y' THEN 'Picked Up'
           WHEN vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
-          WHEN COALESCE(vpc_arch.Courier, 0) = 0 THEN 'No Courier Assigned'
           ELSE 'Order Placed'
         END as OrderStatus,
         CASE

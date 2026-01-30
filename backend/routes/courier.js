@@ -181,10 +181,10 @@ router.get('/orders', authMiddleware, courierOnlyMiddleware, async (req, res) =>
         v.UserEmail as VendorEmail,
         CASE 
           WHEN vpc.IsDelivered = 'Y' THEN 'Delivered'
-          WHEN vpc.IsPartialDelivery = 'Y' THEN 'Partial Delivery'
-          WHEN vpc.IsReturned = 'Y' THEN 'Returned'
+
           WHEN vpc.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
           WHEN vpc.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc.IsPicked_by_Courier = 'Y' THEN 'Picked Up'
           WHEN vpc.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
           ELSE 'Order Placed'
         END as OrderStatus,
@@ -230,10 +230,10 @@ router.get('/orders', authMiddleware, courierOnlyMiddleware, async (req, res) =>
         v.UserEmail as VendorEmail,
         CASE 
           WHEN vpc_arch.IsDelivered = 'Y' THEN 'Delivered'
-          WHEN vpc_arch.IsPartialDelivery = 'Y' THEN 'Partial Delivery'
-          WHEN vpc_arch.IsReturned = 'Y' THEN 'Returned'
+
           WHEN vpc_arch.IsOut_for_Delivery = 'Y' THEN 'Out for Delivery'
           WHEN vpc_arch.IsDispatched = 'Y' THEN 'Dispatched'
+          WHEN vpc_arch.IsPicked_by_Courier = 'Y' THEN 'Picked Up'
           WHEN vpc_arch.IsReady_for_Pickup_by_Courier = 'Y' THEN 'Ready for Pickup'
           ELSE 'Order Placed'
         END as OrderStatus,

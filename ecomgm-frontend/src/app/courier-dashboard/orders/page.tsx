@@ -150,6 +150,8 @@ export default function CourierOrders() {
         return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Out for Delivery</span>;
       case "Dispatched":
         return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">Dispatched</span>;
+      case "Picked Up":
+        return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Picked Up</span>;
       case "Accepted":
         return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Accepted</span>;
       case "Pending":
