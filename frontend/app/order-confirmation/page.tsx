@@ -17,49 +17,56 @@ interface Order {
   PaymentMode: string
 }
 
+interface RecommendedProduct {
+  productId: number;
+  modelId: number;
+  productName: string;
+  price: number;
+  category: string;
+  subcategory: string;
+  score: number;
+  reason: string;
+}
+
 export default function OrderConfirmationPage() {
   const [latestOrder, setLatestOrder] = useState<Order | null>(null)
+  const [recommendedProducts, setRecommendedProducts] = useState<RecommendedProduct[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchLatestOrder() {
-      // Validate authentication
-      if (!validateCustomerAuth()) {
-        performCustomerLogout('/')
-        return
-      }
-      
-      const token = localStorage.getItem('token')
-      if (!token) {
-        setLoading(false)
-        return
-      }
-      
+    // Check if we have order data from session storage
+    const storedData = sessionStorage.getItem('orderConfirmationData');
+    
+    if (storedData) {
       try {
-        const response = await fetch(`${API}/order/history`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const { order, recommendations, timestamp } = JSON.parse(storedData);
         
-        if (response.ok) {
-          const data = await response.json()
-          // Get the most recent order
-          if (data.orders && data.orders.length > 0) {
-            setLatestOrder(data.orders[0])
-          }
-        } else if (response.status === 401) {
-          performCustomerLogout('/')
+        // Check if data is still valid (less than 5 minutes old)
+        const now = Date.now();
+        const dataAge = now - timestamp;
+        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        
+        if (dataAge < fiveMinutes) {
+          console.log('DEBUG: Loading order data from session storage:', order);
+          console.log('DEBUG: Loading recommendations from session storage:', recommendations);
+          
+          setLatestOrder(order);
+          setRecommendedProducts(recommendations || []);
+        } else {
+          console.log('DEBUG: Order confirmation data expired (older than 5 minutes)');
+          // Clear expired data
+          sessionStorage.removeItem('orderConfirmationData');
         }
       } catch (err) {
-        console.error('Error fetching order:', err)
-      } finally {
-        setLoading(false)
+        console.error('Error parsing session storage data:', err);
+        sessionStorage.removeItem('orderConfirmationData');
       }
+    } else {
+      console.log('DEBUG: No order confirmation data found');
     }
     
-    fetchLatestOrder()
-  }, [])
+    setLoading(false);
+  }, []);
 
   if (loading) {
     return (
@@ -117,6 +124,31 @@ export default function OrderConfirmationPage() {
                 </Button>
               </Link>
             </div>
+            
+            {/* Recommended Products Section */}
+            {recommendedProducts && recommendedProducts.length > 0 && (
+              <div className="mt-12">
+                <h2 className="text-2xl font-bold mb-6 text-center">Recommended For You</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {recommendedProducts.map((product) => (
+                    <div key={product.productId} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
+                      <h3 className="font-semibold text-lg mb-2">{product.productName}</h3>
+                      <p className="text-gray-600 text-sm mb-1">{product.category}</p>
+                      <p className="text-gray-600 text-sm mb-3">{product.subcategory}</p>
+                      <p className="text-lg font-bold text-blue-600">₹{product.price.toFixed(2)}</p>
+                      <div className="mt-3">
+                        <Link href={`/models/${product.modelId}`}>
+                          <Button variant="outline" className="w-full">
+                            View Product
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       </div>

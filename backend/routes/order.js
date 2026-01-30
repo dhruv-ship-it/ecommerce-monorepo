@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../index.js';
+import { recommendationService } from '../services/recommendationService.js';
 
 const router = express.Router();
 
@@ -231,8 +232,55 @@ router.post('/place', authMiddleware, async (req, res) => {
     
     // Clear cart
     await conn.query('DELETE FROM shoppingcart WHERE CustomerId = ?', [customerId]);
+    
+    // Generate recommendations based on the first product in the cart
+    // This is a simple approach - we'll use the first product for recommendations
+    let recommendations = [];
+    console.log(`DEBUG: Generating recommendations for customer ${customerId}, cart items count: ${cartItems && cartItems.length || 0}`);
+    if (cartItems && cartItems.length > 0) {
+      console.log(`DEBUG: First product ID for recommendations: ${cartItems[0].ProductId}`);
+      try {
+        recommendations = await recommendationService.getRecommendations(customerId, cartItems[0].ProductId);
+        console.log(`DEBUG: Generated ${recommendations.length} recommendations:`, recommendations);
+      } catch (recError) {
+        console.error('Error generating recommendations:', recError);
+        // Don't fail the order if recommendations fail
+      }
+    } else {
+      console.log('DEBUG: No cart items found for recommendations');
+    }
+    
     conn.release();
-    res.json({ message: 'Order placed' });
+    
+    // Get the latest order details for confirmation
+    const orderDetailsResult = await db.query(
+      `SELECT p.PuchaseId, p.OrderDate, p.TotalAmount, p.PaymentStatus, p.PaymentMode,
+       pr.Product, m.ModelId
+       FROM purchase p
+       JOIN product pr ON p.ProductId = pr.ProductId
+       JOIN model m ON pr.Model = m.ModelId
+       WHERE p.CustomerId = ?
+       ORDER BY p.OrderDate DESC
+       LIMIT 1`,
+      [customerId]
+    );
+    
+    let orderDetails = [];
+    if (Array.isArray(orderDetailsResult)) {
+      if (Array.isArray(orderDetailsResult[0])) {
+        orderDetails = orderDetailsResult[0];
+      } else {
+        orderDetails = orderDetailsResult;
+      }
+    }
+    
+    const latestOrder = orderDetails && orderDetails.length > 0 ? orderDetails[0] : null;
+    
+    res.json({ 
+      message: 'Order placed',
+      order: latestOrder,
+      recommendations: recommendations
+    });
   } catch (err) {
     console.error('Order placement error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -317,6 +365,51 @@ router.get('/history', authMiddleware, async (req, res) => {
     res.json({ orders });
   } catch (err) {
     console.error('Order history error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get recommendations for customer
+router.get('/recommendations', authMiddleware, async (req, res) => {
+  try {
+    // For customers, req.user.id is already the CustomerId from JWT token
+    if (req.user.userType !== 'customer') {
+      return res.status(403).json({ error: 'Only customers can get recommendations' });
+    }
+    
+    const customerId = req.user.id;
+    
+    // Get the most recent order to base recommendations on
+    const conn = await db.getConnection();
+    const latestOrderResult = await conn.query(
+      `SELECT ProductId FROM purchase WHERE CustomerId = ? ORDER BY OrderDate DESC LIMIT 1`,
+      [customerId]
+    );
+    
+    let latestOrder = [];
+    if (Array.isArray(latestOrderResult)) {
+      if (Array.isArray(latestOrderResult[0])) {
+        latestOrder = latestOrderResult[0];
+      } else {
+        latestOrder = latestOrderResult;
+      }
+    }
+    
+    if (!latestOrder || latestOrder.length === 0) {
+      conn.release();
+      return res.json({ recommendations: [] });
+    }
+    
+    const productId = latestOrder[0].ProductId;
+    
+    // Generate recommendations
+    const recommendations = await recommendationService.getRecommendations(customerId, productId);
+    
+    conn.release();
+    
+    res.json({ recommendations });
+  } catch (err) {
+    console.error('Recommendations error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

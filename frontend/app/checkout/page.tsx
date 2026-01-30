@@ -265,7 +265,14 @@ export default function CheckoutPage() {
         const data = await response.json()
         console.log("Order placed:", data)
         
-        // Redirect to order confirmation page or order history
+        // Store order data and recommendations in session storage with timestamp
+        sessionStorage.setItem('orderConfirmationData', JSON.stringify({
+          order: data.order,
+          recommendations: data.recommendations,
+          timestamp: Date.now() // Add timestamp for expiration check
+        }));
+        
+        // Redirect to order confirmation page
         router.push('/order-confirmation')
       } else if (response.status === 401) {
         // Token expired or invalid
