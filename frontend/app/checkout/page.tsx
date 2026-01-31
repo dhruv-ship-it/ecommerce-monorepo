@@ -251,12 +251,16 @@ export default function CheckoutPage() {
         throw new Error('Authentication token not found')
       }
       
+      // Generate idempotency key for this order request
+      const idempotencyKey = crypto.randomUUID();
+      
       // Place the order by calling the backend API
       const response = await fetch(`${API}/order/place`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Idempotency-Key': idempotencyKey
         },
       })
       
@@ -274,6 +278,19 @@ export default function CheckoutPage() {
         
         // Redirect to order confirmation page
         router.push('/order-confirmation')
+      } else if (response.status === 409) {
+        // Order is already being processed - fetch and display existing order
+        const errorData = await response.json();
+        console.log("Order already in progress:", errorData);
+        
+        // Even though there was a conflict, we can try to get the order details
+        // The backend should have the order ready, so we can redirect to confirmation
+        // Or handle this as needed based on response
+        setError(errorData.message || 'Order is being processed, please wait.');
+        // Optionally, we could poll for the order or redirect after a delay
+        setTimeout(() => {
+          router.push('/order-history');
+        }, 2000);
       } else if (response.status === 401) {
         // Token expired or invalid
         performCustomerLogout('/auth/signin')

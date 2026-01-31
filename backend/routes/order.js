@@ -3,8 +3,81 @@ import jwt from 'jsonwebtoken';
 import { db } from '../index.js';
 import { recommendationService } from '../services/recommendationService.js';
 import { notificationService } from '../services/notificationService.js';
+import crypto from 'crypto';
+import { redis } from '../index.js';
 
 const router = express.Router();
+
+// Function to check and handle idempotency with in-progress lock
+async function handleIdempotency(req, customerId) {
+  const idempotencyKey = req.headers['idempotency-key'];
+  
+  if (!idempotencyKey) {
+    return null; // No idempotency key provided, proceed normally
+  }
+  
+  try {
+    // Create cache keys
+    const cacheKey = `idempotency:${customerId}:${idempotencyKey}`;
+    const lockKey = `${cacheKey}:lock`;
+    
+    // Try to acquire in-progress lock with SET NX EX (only if not exists, expire in 60 seconds)
+    const lockAcquired = await redis.set(lockKey, 'LOCKED', {
+      NX: true,  // Only set if key doesn't exist
+      EX: 60     // Expire after 60 seconds (safety)
+    });
+    
+    if (!lockAcquired) {
+      // Lock already exists, meaning another request is in progress
+      // Check if there's already a cached result
+      const cachedResult = await redis.get(cacheKey);
+      if (cachedResult) {
+        console.log(`Idempotency hit for key: ${cacheKey}`);
+        return JSON.parse(cachedResult);
+      } else {
+        // Another request is in progress but hasn't completed yet
+        console.log(`Request in progress for key: ${cacheKey}`);
+        throw new Error('Request already in progress');
+      }
+    }
+    
+    // Lock acquired successfully, proceed with request
+    console.log(`Lock acquired for idempotency key: ${cacheKey}`);
+    return null; // Indicate request should proceed
+  } catch (error) {
+    if (error.message === 'Request already in progress') {
+      throw error; // Re-throw this specific error
+    }
+    console.error('Error checking idempotency:', error);
+    // If Redis is down, proceed with the request (loses idempotency but maintains functionality)
+    return null;
+  }
+}
+
+// Function to cache idempotency result and clean up lock
+async function cacheIdempotencyResult(req, customerId, result) {
+  const idempotencyKey = req.headers['idempotency-key'];
+  
+  if (!idempotencyKey) {
+    return; // No idempotency key, no need to cache
+  }
+  
+  try {
+    const cacheKey = `idempotency:${customerId}:${idempotencyKey}`;
+    const lockKey = `${cacheKey}:lock`;
+    
+    // Cache for 24 hours (86400 seconds)
+    await redis.setEx(cacheKey, 86400, JSON.stringify(result));
+    
+    // Clean up the lock after successful caching
+    await redis.del(lockKey);
+    
+    console.log(`Idempotency result cached for key: ${cacheKey}`);
+  } catch (error) {
+    console.error('Error caching idempotency result:', error);
+    // Don't fail the request if caching fails
+  }
+}
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
@@ -25,18 +98,31 @@ router.post('/place', authMiddleware, async (req, res) => {
     const startTime = Date.now();
     console.log(`ORDER PLACEMENT STARTED at ${new Date(startTime).toISOString()}`);
     
-    conn = await db.getConnection();
-    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED;');
-    await conn.beginTransaction();
-    
     // For customers, req.user.id is already the CustomerId from JWT token
     if (req.user.userType !== 'customer') {
-      await conn.rollback();
-      conn.release();
       return res.status(403).json({ error: 'Only customers can place orders' });
     }
     
     const customerId = req.user.id;
+    
+    // Check for idempotency - if this request was already processed, return cached result
+    let cachedResult;
+    try {
+      cachedResult = await handleIdempotency(req, customerId);
+    } catch (idempotencyError) {
+      if (idempotencyError.message === 'Request already in progress') {
+        return res.status(409).json({ error: 'Order processing in progress', message: 'Please wait for the previous request to complete' });
+      }
+      throw idempotencyError; // Re-throw other errors
+    }
+    if (cachedResult) {
+      console.log(`Returning cached idempotent result for customer ${customerId}`);
+      return res.status(200).json(cachedResult);
+    }
+    
+    conn = await db.getConnection();
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED;');
+    await conn.beginTransaction();
     
     // Get cart items for the customer (including VendorProductId for stock updates)
     const result = await conn.query('SELECT ProductId, VendorProductId, Quantity FROM shoppingcart WHERE CustomerId = ?', [customerId]);
@@ -282,6 +368,13 @@ const endTime = Date.now();
 const duration = endTime - startTime;
 console.log(`ORDER PLACEMENT COMPLETED at ${new Date(endTime).toISOString()}, Duration: ${duration}ms`);
 
+// Cache the successful result for idempotency
+await cacheIdempotencyResult(req, customerId, { 
+  message: 'Order placed',
+  order: latestOrder,
+  recommendations: recommendations
+});
+
 res.json({ 
   message: 'Order placed',
   order: latestOrder,
@@ -289,6 +382,19 @@ res.json({
 });
 } catch (err) {
   console.error('Order placement error:', err);
+  
+  // Clean up the idempotency lock if we have an idempotency key
+  const idempotencyKey = req.headers['idempotency-key'];
+  if (idempotencyKey) {
+    const cacheKey = `idempotency:${customerId}:${idempotencyKey}`;
+    const lockKey = `${cacheKey}:lock`;
+    try {
+      await redis.del(lockKey);
+      console.log(`Idempotency lock cleaned up for key: ${lockKey}`);
+    } catch (lockCleanupErr) {
+      console.error('Error cleaning up idempotency lock:', lockCleanupErr);
+    }
+  }
   
   // Rollback transaction if connection exists
   if (conn) {
