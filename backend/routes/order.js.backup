@@ -26,7 +26,6 @@ router.post('/place', authMiddleware, async (req, res) => {
     console.log(`ORDER PLACEMENT STARTED at ${new Date(startTime).toISOString()}`);
     
     conn = await db.getConnection();
-    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED;');
     await conn.beginTransaction();
     
     // For customers, req.user.id is already the CustomerId from JWT token
@@ -63,7 +62,6 @@ router.post('/place', authMiddleware, async (req, res) => {
     }
     
     // Process each cart item
-    const createdOrders = [];
     for (const item of cartItems) {
       try {
       // Get vendor and default courier for this product using VendorProductId
@@ -131,23 +129,13 @@ router.post('/place', authMiddleware, async (req, res) => {
       }
       const purchaseId = lastPurchase && lastPurchase.length > 0 ? lastPurchase[0].id : null;
       
+      if (!purchaseId) {
+        console.error('Failed to get purchase ID for product:', item.ProductId);
+        continue; // Skip this item if purchase creation failed
+      }
+      
       // Use default courier from VendorProduct directly (no acceptance flow)
       const courierId = vendor.DefaultCourier || 0;
-      
-      // Store order information for later notifications
-      if (purchaseId) {
-        createdOrders.push({
-          purchaseId,
-          productId: item.ProductId,
-          vendorId: vendor.Vendor,
-          courierId: courierId,
-          vendorProductId: item.VendorProductId
-        });
-      }
-      
-      if (!purchaseId) {
-        throw new Error(`Failed to create purchase record for item ${item.ProductId}`);
-      }
       
       // Create order entry in vendorproductcustomercourier table
       // Courier will be assigned 'N' initially, tracking number generated when picked up
@@ -163,130 +151,225 @@ router.post('/place', authMiddleware, async (req, res) => {
       
       console.log(`NOTIFICATION: New order ${purchaseId} created with courier ${courierId || 'none (vendor must assign)'}`);
       
-      // Decrement stock quantity for the vendor product
-      const existingStock = parseFloat(vendor.StockQty) || 0;
-      const newStock = Math.max(0, existingStock - item.Quantity);
-      await conn.query(
-        'UPDATE vendorproduct SET StockQty = ? WHERE VendorProductId = ?',
-        [newStock, vendor.VendorProductId]
-      );
-      console.log(`Stock updated for VendorProductId ${vendor.VendorProductId}: ${existingStock} -> ${newStock}`);
-  } catch (itemError) {
-    console.error('Error processing cart item:', itemError);
-    throw itemError; // Re-throw to trigger transaction rollback
-  }
-}
-
-// Clear cart
-await conn.query('DELETE FROM shoppingcart WHERE CustomerId = ?', [customerId]);
-
-// Commit the transaction BEFORE sending notifications
-await conn.commit();
-conn.release();
-
-// Send notifications AFTER successful commit
-try {
-  // Reconnect for notifications (separate transaction)
-  const notificationConn = await db.getConnection();
-      
-  // Create notifications for each created order (using stored order info)
-  for (const orderInfo of createdOrders) {
-      // Use stored vendor and courier information directly
-      const notifications = [
-        {
+      // Create notifications for order placement using notification service
+      try {
+        console.log(`NOTIFICATION DEBUG: Creating notifications for order ${purchaseId}`);
+        console.log(`NOTIFICATION DEBUG: Customer ID: ${customerId}, Vendor ID: ${vendor.Vendor}, Courier ID: ${courierId}`);
+        
+        // Get vendor and courier user IDs
+        const vendorInfoResult = await conn.query(
+          'SELECT UserId FROM user WHERE UserId = ? AND IsVendor = "Y"',
+          [vendor.Vendor]
+        );
+        
+        // Handle MariaDB result format
+        let vendorInfo = [];
+        if (Array.isArray(vendorInfoResult)) {
+          if (Array.isArray(vendorInfoResult[0])) {
+            vendorInfo = vendorInfoResult[0];
+          } else {
+            vendorInfo = vendorInfoResult;
+          }
+        }
+        
+        console.log(`NOTIFICATION DEBUG: Vendor info query result:`, vendorInfo);
+        
+        let courierUserId = null;
+        if (courierId && courierId !== 0) {
+          const courierInfoResult = await conn.query(
+            'SELECT UserId FROM user WHERE UserId = ? AND IsCourier = "Y"',
+            [courierId]
+          );
+          
+          // Handle MariaDB result format
+          let courierInfo = [];
+          if (Array.isArray(courierInfoResult)) {
+            if (Array.isArray(courierInfoResult[0])) {
+              courierInfo = courierInfoResult[0];
+            } else {
+              courierInfo = courierInfoResult;
+            }
+          }
+          
+          courierUserId = courierInfo && courierInfo.length > 0 ? courierInfo[0].UserId : null;
+          console.log(`NOTIFICATION DEBUG: Courier info query result:`, courierInfo);
+        }
+        
+        // Prepare notifications array
+        const notifications = [];
+        
+        // Customer notification
+        notifications.push({
           recipientId: customerId,
           recipientType: 'customer',
           type: 'Order',
-          message: `Order #${orderInfo.purchaseId} placed successfully. We will keep you updated on its status.`
-        },
-        {
-          recipientId: orderInfo.vendorId,
-          recipientType: 'user',
-          type: 'Order',
-          message: `New order #${orderInfo.purchaseId} placed. Please prepare the items and mark it ready for pickup.`
-        }
-      ];
-      
-      // Add courier notification if courier exists
-      if (orderInfo.courierId) {
-        const courierUserResult = await notificationConn.query(
-          'SELECT UserId FROM user WHERE UserId = ? AND IsCourier = "Y" AND IsBlackListed != "Y"',
-          [orderInfo.courierId]
-        );
+          message: `Order #${purchaseId} placed successfully. We will keep you updated on its status.`
+        });
         
-        if (courierUserResult && courierUserResult.length > 0) {
-          const courierUserId = courierUserResult[0].UserId;
+        // Vendor notification
+        if (vendorInfo && vendorInfo.length > 0) {
+          notifications.push({
+            recipientId: vendorInfo[0].UserId,
+            recipientType: 'user',
+            type: 'Order',
+            message: `New order #${purchaseId} placed. Please prepare the items and mark it ready for pickup.`
+          });
+        }
+        
+        // Courier notification
+        if (courierUserId) {
           notifications.push({
             recipientId: courierUserId,
             recipientType: 'user',
             type: 'Order',
-            message: `New order #${orderInfo.purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`
+            message: `New order #${purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`
           });
         }
-      }
-      
-      // Create all notifications
-      const results = await notificationService.createNotifications(notifications);
-      console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
-      console.log(`NOTIFICATION: Created notifications for order ${orderInfo.purchaseId}`);
+        
+        // Decrement stock quantity for the vendor product
+        const existingStock = parseFloat(vendor.StockQty) || 0;
+        const newStock = Math.max(0, existingStock - item.Quantity);
+        await conn.query(
+          'UPDATE vendorproduct SET StockQty = ? WHERE VendorProductId = ?',
+          [newStock, vendor.VendorProductId]
+        );
+        console.log(`Stock updated for VendorProductId ${vendor.VendorProductId}: ${existingStock} -> ${newStock}`);
+    } catch (itemError) {
+      console.error('Error processing cart item:', itemError);
+      throw itemError; // Re-throw to trigger transaction rollback
     }
+  } catch (loopError) {
+    console.error('Error in cart processing loop:', loopError);
+    throw loopError;
+  }
+  
+  // Clear cart
+  await conn.query('DELETE FROM shoppingcart WHERE CustomerId = ?', [customerId]);
+  
+  // Commit the transaction BEFORE sending notifications
+  await conn.commit();
+  conn.release();
+  
+  // Generate recommendations based on the first product in the cart
+  // This is a simple approach - we'll use the first product for recommendations
+  let recommendations = [];
+  console.log(`DEBUG: Generating recommendations for customer ${customerId}, cart items count: ${cartItems && cartItems.length || 0}`);
+  if (cartItems && cartItems.length > 0) {
+    console.log(`DEBUG: First product ID for recommendations: ${cartItems[0].ProductId}`);
+    try {
+      recommendations = await recommendationService.getRecommendations(customerId, cartItems[0].ProductId);
+      console.log(`DEBUG: Generated ${recommendations.length} recommendations:`, recommendations);
+    } catch (recError) {
+      console.error('Error generating recommendations:', recError);
+      // Don't fail the order if recommendations fail
+    }
+  } else {
+    console.log('DEBUG: No cart items found for recommendations');
+  }
+  
+  // Send notifications AFTER successful commit
+  try {
+    // Reconnect for notifications (separate transaction)
+    const notificationConn = await db.getConnection();
     
+    // Create notifications for each purchase
+    for (const item of cartItems) {
+      const purchaseResult = await notificationConn.query(
+        'SELECT p.PuchaseId FROM purchase p WHERE p.CustomerId = ? AND p.ProductId = ? ORDER BY p.OrderDate DESC LIMIT 1',
+        [customerId, item.ProductId]
+      );
+        
+      const purchaseId = purchaseResult && purchaseResult.length > 0 ? purchaseResult[0].PuchaseId : null;
+      if (!purchaseId) continue;
+        
+      // Get vendor info for notifications
+      const vendorProductResult = await notificationConn.query(
+        'SELECT Vendor, Courier as DefaultCourier FROM vendorproduct WHERE VendorProductId = ?',
+        [item.VendorProductId]
+      );
+        
+      if (vendorProductResult && vendorProductResult.length > 0) {
+        const vendor = vendorProductResult[0];
+          
+        const notifications = [
+          {
+            recipientId: customerId,
+            recipientType: 'customer',
+            type: 'Order',
+            message: `Order #${purchaseId} placed successfully. We will keep you updated on its status.`
+          },
+          {
+            recipientId: vendor.Vendor,
+            recipientType: 'user',
+            type: 'Order',
+            message: `New order #${purchaseId} placed. Please prepare the items and mark it ready for pickup.`
+          }
+        ];
+          
+        // Add courier notification if courier exists
+        if (vendor.DefaultCourier) {
+          const courierUserResult = await notificationConn.query(
+            'SELECT UserId FROM user WHERE UserId = ? AND IsCourier = "Y" AND IsBlackListed != "Y"',
+            [vendor.DefaultCourier]
+          );
+            
+          if (courierUserResult && courierUserResult.length > 0) {
+            const courierUserId = courierUserResult[0].UserId;
+            notifications.push({
+              recipientId: courierUserId,
+              recipientType: 'user',
+              type: 'Order',
+              message: `New order #${purchaseId} placed. Please wait until it's marked ready for pickup by the vendor.`
+            });
+          }
+        }
+          
+        // Create all notifications
+        const results = await notificationService.createNotifications(notifications);
+        console.log(`NOTIFICATION DEBUG: Notification creation results:`, results);
+        console.log(`NOTIFICATION: Created notifications for order ${purchaseId}`);
+      }
+    }
+      
     notificationConn.release();
   } catch (notificationError) {
     console.error('Error creating notifications:', notificationError);
     // Don't fail the order creation if notification fails
   }
-
-// Generate recommendations based on the first product in the cart
-// This is a simple approach - we'll use the first product for recommendations
-let recommendations = [];
-console.log(`DEBUG: Generating recommendations for customer ${customerId}, cart items count: ${cartItems && cartItems.length || 0}`);
-if (cartItems && cartItems.length > 0) {
-  console.log(`DEBUG: First product ID for recommendations: ${cartItems[0].ProductId}`);
-  try {
-    recommendations = await recommendationService.getRecommendations(customerId, cartItems[0].ProductId);
-    console.log(`DEBUG: Generated ${recommendations.length} recommendations:`, recommendations);
-  } catch (recError) {
-    console.error('Error generating recommendations:', recError);
-    // Don't fail the order if recommendations fail
+  
+  // Get the latest order details for confirmation
+  const orderDetailsResult = await db.query(
+    `SELECT p.PuchaseId, p.OrderDate, p.TotalAmount, p.PaymentStatus, p.PaymentMode,
+     pr.Product, m.ModelId
+     FROM purchase p
+     JOIN product pr ON p.ProductId = pr.ProductId
+     JOIN model m ON pr.Model = m.ModelId
+     WHERE p.CustomerId = ?
+     ORDER BY p.OrderDate DESC
+     LIMIT 1`,
+    [customerId]
+  );
+    
+  let orderDetails = [];
+  if (Array.isArray(orderDetailsResult)) {
+    if (Array.isArray(orderDetailsResult[0])) {
+      orderDetails = orderDetailsResult[0];
+    } else {
+      orderDetails = orderDetailsResult;
+    }
   }
-} else {
-  console.log('DEBUG: No cart items found for recommendations');
-}
-
-// Get the latest order details for confirmation
-const orderDetailsResult = await db.query(
-  `SELECT p.PuchaseId, p.OrderDate, p.TotalAmount, p.PaymentStatus, p.PaymentMode,
-   pr.Product, m.ModelId
-   FROM purchase p
-   JOIN product pr ON p.ProductId = pr.ProductId
-   JOIN model m ON pr.Model = m.ModelId
-   WHERE p.CustomerId = ?
-   ORDER BY p.OrderDate DESC
-   LIMIT 1`,
-  [customerId]
-);
-
-let orderDetails = [];
-if (Array.isArray(orderDetailsResult)) {
-  if (Array.isArray(orderDetailsResult[0])) {
-    orderDetails = orderDetailsResult[0];
-  } else {
-    orderDetails = orderDetailsResult;
-  }
-}
-
-const latestOrder = orderDetails && orderDetails.length > 0 ? orderDetails[0] : null;
-
-const endTime = Date.now();
-const duration = endTime - startTime;
-console.log(`ORDER PLACEMENT COMPLETED at ${new Date(endTime).toISOString()}, Duration: ${duration}ms`);
-
-res.json({ 
-  message: 'Order placed',
-  order: latestOrder,
-  recommendations: recommendations
-});
+    
+  const latestOrder = orderDetails && orderDetails.length > 0 ? orderDetails[0] : null;
+    
+  const endTime = Date.now();
+  const duration = endTime - startTime;
+  console.log(`ORDER PLACEMENT COMPLETED at ${new Date(endTime).toISOString()}, Duration: ${duration}ms`);
+  
+  res.json({ 
+    message: 'Order placed',
+    order: latestOrder,
+    recommendations: recommendations
+  });
 } catch (err) {
   console.error('Order placement error:', err);
   
@@ -318,8 +401,6 @@ res.json({
   
   res.status(500).json({ error: 'Server error' });
 }
-}
-);
 
 // View order history
 router.get('/history', authMiddleware, async (req, res) => {
